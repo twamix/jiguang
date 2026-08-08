@@ -4,8 +4,10 @@
 ![Next.js](https://img.shields.io/badge/Next.js-14-black)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-38B2AC)
 ![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748)
-![GitHub stars](https://img.shields.io/github/stars/imbingox/jiguang-navigation.svg?style=social)
-![GitHub forks](https://img.shields.io/github/forks/imbingox/jiguang-navigation.svg?style=social)
+![GitHub stars](https://img.shields.io/github/stars/twamix/jiguang.svg?style=social)
+![GitHub forks](https://img.shields.io/github/forks/twamix/jiguang.svg?style=social)
+
+> 本项目修改自 [sxt2204/jiguang-navigation](https://github.com/sxt2204/jiguang-navigation)，感谢原作者及贡献者。
 
 **JiGuang Navigation is a modern, highly customizable, and privacy-focused personal start page.**  
 **极光导航是一款现代、高度可定制且注重隐私的个人起始页。**
@@ -131,8 +133,8 @@ Built with the latest web technologies, it offers a stunning visual experience w
 
 1. **Clone the repository | 克隆仓库**
    ```bash
-   git clone https://github.com/imbingox/jiguang-navigation.git
-   cd jiguang-navigation
+   git clone https://github.com/twamix/jiguang.git
+   cd jiguang
    ```
 
 2. **Install dependencies | 安装依赖**
@@ -180,7 +182,7 @@ Built with the latest web technologies, it offers a stunning visual experience w
    ```yaml
    services:
      jg_nav:
-       image: ghcr.io/imbingox/jiguang-navigation:latest
+       image: ghcr.io/twamix/jiguang:latest
        container_name: jg_nav
        ports:
          - "8002:8002"
@@ -206,8 +208,8 @@ Built with the latest web technologies, it offers a stunning visual experience w
    ```bash
    docker compose up -d
    ```
-   The default image is `ghcr.io/imbingox/jiguang-navigation:latest`.  
-   默认镜像为 `ghcr.io/imbingox/jiguang-navigation:latest`。
+   The default image is `ghcr.io/twamix/jiguang:latest`.
+   默认镜像为 `ghcr.io/twamix/jiguang:latest`。
 
 3. **Build locally instead | 本地自行构建**
    ```bash

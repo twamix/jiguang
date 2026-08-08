@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import NextImage from 'next/image';
+import React, { useState, useEffect } from 'react';
 import { NOISE_BASE64 } from '@/lib/utils';
-import { getUploadUrl, isUploadPath } from '@/lib/upload-url';
+import { getUploadUrl } from '@/lib/upload-url';
 
 interface AuroraBackgroundProps {
     isDarkMode: boolean;
@@ -9,10 +8,33 @@ interface AuroraBackgroundProps {
 }
 
 export function AuroraBackground({ isDarkMode, layoutSettings }: AuroraBackgroundProps) {
+    const [loadedUrl, setLoadedUrl] = useState<string | undefined>(undefined);
     const [isLoaded, setIsLoaded] = useState(false);
 
     useEffect(() => {
-        setIsLoaded(false);
+        const url = layoutSettings?.bgUrl;
+        if (!url) {
+            setLoadedUrl(undefined);
+            setIsLoaded(false);
+            return;
+        }
+
+        let cancelled = false;
+        const image = new Image();
+        image.decoding = 'async';
+        image.fetchPriority = 'high';
+        image.onload = () => {
+            if (cancelled) return;
+            // 预加载成功后再切换，加载期间继续显示上一张壁纸。
+            setLoadedUrl(url);
+            setIsLoaded(true);
+        };
+        image.src = getUploadUrl(url);
+
+        return () => {
+            cancelled = true;
+            image.onload = null;
+        };
     }, [layoutSettings?.bgUrl]);
 
     // Default Aurora Layer (Always rendered as base)
@@ -38,9 +60,9 @@ export function AuroraBackground({ isDarkMode, layoutSettings }: AuroraBackgroun
             );
         }
 
-        // Mode 2: Custom/Bing Image
-        if (layoutSettings?.bgUrl) {
-            const isCustom = layoutSettings.bgType === 'custom';
+        // Mode 2: Custom/Bing/Network Image
+        if (layoutSettings?.bgUrl && loadedUrl) {
+            const isCustom = layoutSettings.bgType === 'custom' || layoutSettings.bgType === 'network';
             const scale = isCustom ? (layoutSettings.bgScale || 100) / 100 : 1;
             const bgX = isCustom ? (layoutSettings.bgX ?? 50) : 50;
             const bgY = isCustom ? (layoutSettings.bgY ?? 50) : 50;
@@ -49,34 +71,18 @@ export function AuroraBackground({ isDarkMode, layoutSettings }: AuroraBackgroun
                 <>
                     {defaultAurora}
                     <div className={`fixed inset-0 z-0 pointer-events-none overflow-hidden transition-opacity duration-700 ease-in-out ${isLoaded ? 'opacity-100' : 'opacity-0'}`}>
-                        {/* Use native img for upload paths to avoid Next.js Image optimization issues in Docker */}
-                        {isUploadPath(layoutSettings.bgUrl) ? (
-                            <img
-                                src={getUploadUrl(layoutSettings.bgUrl)}
-                                alt="Background"
-                                className="absolute inset-0 w-full h-full"
-                                style={{
-                                    objectFit: 'cover',
-                                    objectPosition: `${bgX}% ${bgY}%`,
-                                    transform: `scale(${scale})`,
-                                }}
-                                onLoad={() => setIsLoaded(true)}
-                            />
-                        ) : (
-                            <NextImage
-                                src={layoutSettings.bgUrl || ''}
-                                alt="Background"
-                                fill
-                                priority
-                                quality={90}
-                                style={{
-                                    objectFit: 'cover',
-                                    objectPosition: `${bgX}% ${bgY}%`,
-                                    transform: `scale(${scale})`,
-                                }}
-                                onLoad={() => setIsLoaded(true)}
-                            />
-                        )}
+                        <img
+                            src={getUploadUrl(loadedUrl)}
+                            alt="Background"
+                            className="absolute inset-0 w-full h-full"
+                            style={{
+                                objectFit: 'cover',
+                                objectPosition: `${bgX}% ${bgY}%`,
+                                transform: `scale(${scale})`,
+                            }}
+                            fetchPriority="high"
+                            decoding="async"
+                        />
                         <div
                             className="absolute inset-0 bg-black transition-opacity duration-300"
                             style={{ opacity: (layoutSettings.bgOpacity ?? 40) / 100 }}

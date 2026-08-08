@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
     Clock, MapPin, Activity, SunMedium, Cloud, CloudSnow, CloudRain, CloudLightning,
     Wind, Droplets, Timer, Globe, Play, Pause, RotateCcw, Thermometer, Sun, Shield,
-    CheckSquare, TrendingUp, CalendarClock, Plus, X, Check
+    CheckSquare, TrendingUp, CalendarClock, Plus, X, Check, LocateFixed
 } from 'lucide-react';
 import { formatDate, translateCity } from '@/lib/utils';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion';
@@ -147,6 +147,7 @@ export const WidgetDashboard = React.memo(function WidgetDashboard({ isDarkMode,
         hourly: [], aqi: null, uv: null, loading: true, error: false
     });
     const [weatherRefreshKey, setWeatherRefreshKey] = useState(0);
+    const [usePreciseLocation, setUsePreciseLocation] = useState(false);
     const [localTimeZone, setLocalTimeZone] = useState('');
     const [mounted, setMounted] = useState(false);
 
@@ -435,7 +436,7 @@ export const WidgetDashboard = React.memo(function WidgetDashboard({ isDarkMode,
         };
 
         const initWeather = () => {
-            if ('geolocation' in navigator) {
+            if (usePreciseLocation && 'geolocation' in navigator) {
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
                         const { latitude, longitude } = position.coords;
@@ -443,7 +444,7 @@ export const WidgetDashboard = React.memo(function WidgetDashboard({ isDarkMode,
                         fetchLocationName(latitude, longitude);
                     },
                     () => {
-                        fetchByIP();
+                        setUsePreciseLocation(false);
                     }
                 );
             } else {
@@ -454,7 +455,7 @@ export const WidgetDashboard = React.memo(function WidgetDashboard({ isDarkMode,
         initWeather();
         const interval = setInterval(initWeather, 600000); //Refresh every 10 minutes
         return () => clearInterval(interval);
-    }, [weatherRefreshKey]);
+    }, [weatherRefreshKey, usePreciseLocation]);
 
     // Get next holiday countdown
     const getNextHoliday = useCallback(() => {
@@ -822,14 +823,18 @@ export const WidgetDashboard = React.memo(function WidgetDashboard({ isDarkMode,
                             <span className={`text-xs font-medium truncate max-w-[100px] sm:max-w-[140px] ${isDarkMode ? 'opacity-70' : 'text-slate-700'}`}>{locationName}</span>
                             <button
                                 type="button"
-                                title="重新获取当前位置"
+                                title={usePreciseLocation ? '刷新当前位置天气' : '使用精确定位'}
                                 onClick={() => {
                                     setWeather((prev: any) => ({ ...prev, loading: true, error: false }));
-                                    setWeatherRefreshKey(key => key + 1);
+                                    if (usePreciseLocation) {
+                                        setWeatherRefreshKey(key => key + 1);
+                                    } else {
+                                        setUsePreciseLocation(true);
+                                    }
                                 }}
                                 className={`rounded-full p-1 transition-colors ${isDarkMode ? 'hover:bg-white/10 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'}`}
                             >
-                                <RotateCcw size={10} />
+                                {usePreciseLocation ? <RotateCcw size={10} /> : <LocateFixed size={10} />}
                             </button>
                         </div>
                         <div className="flex items-center gap-2">

@@ -35,6 +35,8 @@ export function EditModal({ site, categories, sites, isDarkMode, onClose, onSave
     const { allFonts } = useFonts();
     const iconInputRef = useRef<HTMLInputElement>(null);
     const lastFetchedUrl = useRef<string>('');
+    const metadataRequestId = useRef(0);
+    const nameEditedByUser = useRef(false);
 
     useEffect(() => {
         if (site) setF({ ...site, iconType: site.iconType || 'auto', isHidden: site.isHidden || false, type: site.type || 'site', parentId: site.parentId || '' });
@@ -42,6 +44,37 @@ export function EditModal({ site, categories, sites, isDarkMode, onClose, onSave
 
     const inputClass = `w-full rounded-xl px-3 py-2.5 text-sm border transition-all focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none ${isDarkMode ? 'bg-slate-800/50 border-white/10 placeholder:text-slate-500' : 'bg-slate-50 border-slate-200 placeholder:text-slate-400'}`;
     const labelClass = "text-xs font-medium opacity-70 ml-1 mb-1.5 block";
+
+    const fetchSiteMetadata = async () => {
+        let url = f.url.trim();
+        if (!url) return;
+
+        if (!/^https?:\/\//i.test(url)) {
+            url = `https://${url}`;
+            setF(prev => ({ ...prev, url }));
+        }
+
+        if (url === lastFetchedUrl.current) return;
+
+        lastFetchedUrl.current = url;
+        const requestId = ++metadataRequestId.current;
+
+        try {
+            const response = await fetch(`/api/metadata?url=${encodeURIComponent(url)}`);
+            if (!response.ok) return;
+
+            const metadata = await response.json();
+            if (requestId !== metadataRequestId.current) return;
+
+            setF(prev => ({
+                ...prev,
+                name: metadata.title && !nameEditedByUser.current ? metadata.title : prev.name,
+                desc: metadata.description || prev.desc
+            }));
+        } catch (error) {
+            console.error('Failed to fetch site metadata', error);
+        }
+    };
 
     const handleIconUpload = (e: any) => {
         const file = e.target.files[0];
@@ -151,62 +184,18 @@ export function EditModal({ site, categories, sites, isDarkMode, onClose, onSave
                                     autoFocus={!site}
                                     className={`w-full pl-10 pr-4 py-3 rounded-xl text-base border-2 outline-none transition-all ${isDarkMode ? 'bg-slate-800/50 border-white/5 focus:border-indigo-500/50' : 'bg-slate-50 border-slate-100 focus:border-indigo-500/30'} focus:ring-4 focus:ring-indigo-500/10`}
                                     value={f.url}
-                                    onChange={e => setF({ ...f, url: e.target.value })}
-                                    onKeyDown={async (e) => {
+                                    onChange={e => {
+                                        lastFetchedUrl.current = '';
+                                        metadataRequestId.current += 1;
+                                        setF({ ...f, url: e.target.value });
+                                    }}
+                                    onKeyDown={e => {
                                         if (e.key === 'Enter') {
                                             e.preventDefault();
-                                            let val = f.url.trim();
-                                            if (!val) return;
-
-                                            // Auto-prepend https://
-                                            if (!/^https?:\/\//i.test(val)) {
-                                                val = 'https://' + val;
-                                                setF(prev => ({ ...prev, url: val }));
-                                            }
-
-                                            // Fetch metadata on Enter key
-                                            try {
-                                                const urlChanged = val !== lastFetchedUrl.current;
-                                                lastFetchedUrl.current = val;
-                                                const res = await fetch(`/api/metadata?url=${encodeURIComponent(val)}`);
-                                                if (res.ok) {
-                                                    const data = await res.json();
-                                                    setF(prev => ({
-                                                        ...prev,
-                                                        name: data.title || prev.name,
-                                                        desc: (urlChanged || data.description) ? data.description : prev.desc
-                                                    }));
-                                                }
-                                            } catch (e) {
-                                                console.error('Failed to fetch title', e);
-                                            }
+                                            void fetchSiteMetadata();
                                         }
                                     }}
-                                    onBlur={async () => {
-                                        let val = f.url.trim();
-                                        if (f.type === 'site' && !val) return; // Only return early for missing URL if type is 'site'.
-                                        if (!/^https?:\/\//i.test(val)) {
-                                            val = 'https://' + val;
-                                            setF(prev => ({ ...prev, url: val }));
-                                        }
-                                        if (!site) {
-                                            try {
-                                                const urlChanged = val !== lastFetchedUrl.current;
-                                                lastFetchedUrl.current = val;
-                                                const res = await fetch(`/api/metadata?url=${encodeURIComponent(val)}`);
-                                                if (res.ok) {
-                                                    const data = await res.json();
-                                                    setF(prev => ({
-                                                        ...prev,
-                                                        name: data.title || prev.name,
-                                                        desc: (urlChanged || data.description) ? data.description : prev.desc
-                                                    }));
-                                                }
-                                            } catch (e) {
-                                                console.error('Failed to fetch title', e);
-                                            }
-                                        }
-                                    }}
+                                    onBlur={() => void fetchSiteMetadata()}
                                     placeholder="输入网站链接 (例如 google.com)"
                                 />
                             </div>
@@ -324,7 +313,10 @@ export function EditModal({ site, categories, sites, isDarkMode, onClose, onSave
                             {/* Right Column: Details (7 cols) */}
                             <div className="md:col-span-7 flex flex-col gap-5">
                                 <input required className={inputClass} value={f.name}
-                                    onChange={e => setF({ ...f, name: e.target.value })}
+                                    onChange={e => {
+                                        nameEditedByUser.current = true;
+                                        setF({ ...f, name: e.target.value });
+                                    }}
                                     placeholder="例如: Google" />
 
                                 {/* Visibility Toggle */}

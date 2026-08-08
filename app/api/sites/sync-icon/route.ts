@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { downloadAndSaveIcon } from '@/lib/icon-downloader';
+import { downloadAndSaveIcon, getTraditionalFaviconCandidates } from '@/lib/icon-downloader';
 import { requireAdmin } from '@/lib/auth';
-
-const getFaviconUrl = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
 
 export async function POST(request: Request) {
     try {
@@ -24,19 +22,18 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Site not found or has no URL' }, { status: 404 });
         }
 
-        let downloadUrl = '';
+        let downloadUrls: string[] = [];
         try {
-            const domain = new URL(site.url).hostname;
-            downloadUrl = getFaviconUrl(domain);
+            downloadUrls = getTraditionalFaviconCandidates(site.url);
         } catch (e) {
             return NextResponse.json({ error: 'Invalid Site URL' }, { status: 400 });
         }
 
         // Trigger download
-        const result = await downloadAndSaveIcon(site.id, downloadUrl);
+        const result = await downloadAndSaveIcon(site.id, downloadUrls, { force: true, siteUrl: site.url });
 
         if (!result) {
-            console.error(`[Sync API] Failed to download icon for site ${site.id} from ${downloadUrl}`);
+            console.error(`[Sync API] Failed to download icon for site ${site.id} from ${downloadUrls.join(', ')}`);
             return NextResponse.json({ error: 'Failed to download icon' }, { status: 500 });
         }
 

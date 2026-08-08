@@ -5,9 +5,19 @@ interface PrivateModeScreenProps {
     isDarkMode: boolean;
     onVerify: (password: string) => Promise<boolean>;
     appConfig: any;
+    variant?: 'fullscreen' | 'inline';
+    title?: string;
+    description?: string;
 }
 
-export function PrivateModeScreen({ isDarkMode, onVerify, appConfig }: PrivateModeScreenProps) {
+export function PrivateModeScreen({
+    isDarkMode,
+    onVerify,
+    appConfig,
+    variant = 'fullscreen',
+    title = '私有导航站',
+    description = '请输入访问密码以查看内容'
+}: PrivateModeScreenProps) {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -25,13 +35,15 @@ export function PrivateModeScreen({ isDarkMode, onVerify, appConfig }: PrivateMo
         setIsLoading(false);
     };
 
+    const isInline = variant === 'inline';
+
     return (
-        <div className={`fixed inset-0 z-[200] flex items-center justify-center p-4 ${isDarkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
+        <div className={`${isInline ? 'relative min-h-[360px] rounded-2xl border my-4' : 'fixed inset-0 z-[200]'} flex items-center justify-center p-4 ${isDarkMode ? 'bg-slate-900 border-white/10' : 'bg-slate-50 border-slate-200'}`}>
             <div className="text-center max-w-sm w-full">
                 {/* Logo */}
-                <div className="mb-8">
+                <div className={isInline ? 'mb-6' : 'mb-8'}>
                     {appConfig.logoImage ? (
-                        <img src={appConfig.logoImage} alt="Logo" className="h-16 mx-auto mb-4" />
+                        <img src={appConfig.logoImage} alt="Logo" className={`${isInline ? 'h-12' : 'h-16'} mx-auto mb-4`} />
                     ) : (
                         <div className={`text-3xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
                             {appConfig.logoText}<span className="text-indigo-500">{appConfig.logoHighlight}</span>
@@ -40,15 +52,15 @@ export function PrivateModeScreen({ isDarkMode, onVerify, appConfig }: PrivateMo
                 </div>
 
                 {/* Lock Icon */}
-                <div className={`w-20 h-20 mx-auto mb-6 rounded-2xl flex items-center justify-center ${isDarkMode ? 'bg-indigo-500/20' : 'bg-indigo-50'}`}>
-                    <Lock className="text-indigo-500" size={36} />
+                <div className={`${isInline ? 'w-16 h-16 mb-4' : 'w-20 h-20 mb-6'} mx-auto rounded-2xl flex items-center justify-center ${isDarkMode ? 'bg-indigo-500/20' : 'bg-indigo-50'}`}>
+                    <Lock className="text-indigo-500" size={isInline ? 30 : 36} />
                 </div>
 
                 <h2 className={`text-xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
-                    私有导航站
+                    {title}
                 </h2>
                 <p className={`text-sm mb-6 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                    请输入访问密码以查看内容
+                    {description}
                 </p>
 
                 <form onSubmit={handleSubmit} className="space-y-4">

@@ -6,10 +6,11 @@ import NextImage from 'next/image';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Globe, MoreHorizontal, ExternalLink, Folder } from 'lucide-react';
-import { hexToRgb, getAccessibleTextColor, shouldUseTextShadow, FAVICON_PROVIDERS } from '@/lib/utils';
+import { hexToRgb, getAccessibleTextColor, shouldUseTextShadow } from '@/lib/utils';
 import { ICON_MAP, FONTS } from '@/lib/constants';
 import { useFonts } from '@/app/hooks/useFonts';
 import { useOnlineStatus } from '@/app/hooks/useOnlineStatus';
+import { getUploadUrl } from '@/lib/upload-url';
 
 interface SiteCardProps {
     site: any;
@@ -38,25 +39,22 @@ export const SiteCard = React.memo(function SiteCard({
     isDropTarget, // Visual feedback for folder drop target
 }: SiteCardProps & { childCount?: number }) {
     const isOnline = useOnlineStatus();
-    const [iconState, setIconState] = useState(0);
     const [imgSrc, setImgSrc] = useState<string | null>(null);
     const [hasError, setHasError] = useState(false);
 
     useEffect(() => {
-        setIconState(0);
         setHasError(false);
     }, [site.url, site.iconType, isOnline]);
 
     useEffect(() => {
         if (site.iconType === 'upload' && site.customIconUrl) {
-            setImgSrc(site.customIconUrl);
+            setImgSrc(getUploadUrl(site.customIconUrl));
             setHasError(false);
-        } else if (site.iconType === 'auto' && site.icon && (site.icon.startsWith('/') || site.icon.startsWith('http'))) {
-            // Priority 1: Local Cache
-            setImgSrc(site.icon);
+        } else if (site.iconType === 'auto' && site.id) {
+            setImgSrc(`/api/sites/${encodeURIComponent(site.id)}/icon?v=${encodeURIComponent(site.updatedAt || site.icon || '')}`);
             setHasError(false);
         }
-    }, [site.customIconUrl, site.iconType, site.icon]);
+    }, [site.customIconUrl, site.iconType, site.icon, site.id, site.updatedAt]);
 
     const handleClick = (e: React.MouseEvent) => {
         // Assuming isDragging is defined elsewhere or will be added.
@@ -76,13 +74,12 @@ export const SiteCard = React.memo(function SiteCard({
     const handleImageError = () => {
         if (hasError) return;
         setHasError(true);
-        // Fallback logic handled in render
     };
 
     const Icon = site.type === 'folder' ? Folder : (ICON_MAP[site.icon] || Globe);
     const brandRgb = hexToRgb(site.color || '#6366f1');
     const bgBase = isDarkMode ? [30, 41, 59] : [255, 255, 255];
-    const isWallpaperMode = settings.bgEnabled && (settings.bgType === 'bing' || settings.bgType === 'custom');
+    const isWallpaperMode = settings.bgEnabled && (settings.bgType === 'bing' || settings.bgType === 'custom' || settings.bgType === 'network');
     const safeOpacity = settings.glassOpacity / 100;
 
     // --- Shadow Calculation ---
@@ -254,38 +251,15 @@ export const SiteCard = React.memo(function SiteCard({
     // 3. Gallery: Icon (Handled by else block via iconType check)
 
     if (site.iconType === 'auto') {
-        // Auto Mode
-        const hasLocalCache = site.icon && (site.icon.startsWith('/') || site.icon.startsWith('http'));
-
-        if (!hasError && hasLocalCache) {
-            // Priority 1: Local Cache
-            // We use site.icon directly. If it fails, onError will trigger and we switch to providers.
-            currentSrc = site.icon;
+        if (!hasError && site.id) {
+            currentSrc = imgSrc || `/api/sites/${encodeURIComponent(site.id)}/icon?v=${encodeURIComponent(site.updatedAt || site.icon || '')}`;
             showImage = true;
-        } else {
-            // Priority 2: Online Fetch (Providers) - ONLY if Online
-            if (isOnline) {
-                let providerIndex = iconState;
-                if (hasLocalCache) {
-                    providerIndex = iconState - 1;
-                }
-
-                if (providerIndex >= 0 && providerIndex < FAVICON_PROVIDERS.length) {
-                    try {
-                        const domain = new URL(site.url).hostname;
-                        currentSrc = FAVICON_PROVIDERS[providerIndex](domain);
-                        showImage = true;
-                    } catch (e) {
-                        // Invalid URL, let it fail to text
-                    }
-                }
-            }
         }
     } else if (site.iconType === 'upload') {
         // Upload Mode
         if (site.customIconUrl && !hasError) {
             // Priority 1: Uploaded File
-            currentSrc = site.customIconUrl;
+            currentSrc = getUploadUrl(site.customIconUrl);
             showImage = true;
         }
         // Priority 2: Fallback to Text (First Char) comes naturally if showImage is false.
@@ -306,8 +280,7 @@ export const SiteCard = React.memo(function SiteCard({
                     height={40}
                     className="object-contain w-full h-full"
                     onError={() => {
-                        setHasError(true);
-                        setIconState(prev => prev + 1);
+                        handleImageError();
                     }}
                     unoptimized={true}
                 />

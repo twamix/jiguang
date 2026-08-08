@@ -1,13 +1,14 @@
 services:
   jg_nav:
-    image: ghcr.io/imbingox/jiguang-navigation:latest
-    container_name: jg_nav
+    image: ghcr.io/twamix/jiguang:latest
+    build: .
+    container_name: jiguang
     ports:
       - "8002:8002"
     environment:
       - NODE_ENV=production
       - DATABASE_URL=file:/app/data/dev.db
-      - OWNER_PASSWORD=change-this-before-going-public
+      - OWNER_PASSWORD=${OWNER_PASSWORD:?请在 .env 中设置 OWNER_PASSWORD}
     volumes:
       - ./data:/app/data
     restart: unless-stopped

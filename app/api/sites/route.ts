@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { downloadAndSaveIcon, saveBase64Icon, deleteIcon } from '@/lib/icon-downloader';
+import { downloadAndSaveIcon, saveBase64Icon, deleteCachedIcon, deleteIcon, getTraditionalFaviconCandidates } from '@/lib/icon-downloader';
 import { requireAdmin } from '@/lib/auth';
-
-const getFaviconUrl = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
 
 export async function POST(request: Request) {
     try {
@@ -15,7 +13,8 @@ export async function POST(request: Request) {
         let initialIconType = body.iconType;
         let initialCustomIconUrl = body.customIconUrl;
         let shouldDownload = false;
-        let downloadUrl = '';
+        let downloadUrls: string[] = [];
+        let downloadStorage: 'cache' | 'upload' = 'cache';
 
         // Logic: If auto, use Google Favicon URL initially.
         // If custom URL (http), use it.
@@ -23,16 +22,16 @@ export async function POST(request: Request) {
 
         if (body.iconType === 'auto' && body.url) {
             try {
-                const domain = new URL(body.url).hostname;
-                downloadUrl = getFaviconUrl(domain);
-                initialIconType = 'upload'; // Switch to upload so frontend uses the URL
-                initialCustomIconUrl = downloadUrl; // Temporary remote URL
+                downloadUrls = getTraditionalFaviconCandidates(body.url);
+                initialIconType = 'auto';
+                initialCustomIconUrl = '';
                 shouldDownload = true;
             } catch (e) { }
         } else if (body.iconType === 'upload' && body.customIconUrl) {
             if (body.customIconUrl.startsWith('http')) {
-                downloadUrl = body.customIconUrl;
+                downloadUrls = [body.customIconUrl];
                 shouldDownload = true;
+                downloadStorage = 'upload';
             } else if (body.customIconUrl.startsWith('data:image')) {
                 // Handle Base64 Upload immediately
                 const savedPath = await saveBase64Icon(body.id || 'temp', body.customIconUrl);
@@ -79,9 +78,15 @@ export async function POST(request: Request) {
 
         // Handle download - await it to ensure it completes, or log error
         // Note: In Vercel serverless this might still time out if too long, but for local/VPS it's better to await or use waitUntil
-        if (shouldDownload && downloadUrl) {
-            console.log(`[Sites API] Triggering icon download for ${site.id} from ${downloadUrl}`);
-            await downloadAndSaveIcon(site.id, downloadUrl);
+        if (shouldDownload && downloadUrls.length > 0) {
+            console.log(`[Sites API] Triggering icon download for ${site.id} from ${downloadUrls.join(', ')}`);
+            const localIcon = await downloadAndSaveIcon(site.id, downloadUrls, {
+                storage: downloadStorage,
+                siteUrl: downloadStorage === 'cache' ? site.url : undefined
+            });
+            if (localIcon) {
+                return NextResponse.json(await prisma.site.findUnique({ where: { id: site.id } }));
+            }
         }
 
         return NextResponse.json(site);
@@ -121,24 +126,34 @@ export async function PUT(request: Request) {
             return NextResponse.json({ success: true });
         }
 
+        const existingSite = await prisma.site.findUnique({ where: { id: body.id } });
+        if (!existingSite) {
+            return NextResponse.json({ error: 'Site not found' }, { status: 404 });
+        }
+
         let initialIconType = body.iconType;
         let initialCustomIconUrl = body.customIconUrl;
         let shouldDownload = false;
-        let downloadUrl = '';
+        let downloadUrls: string[] = [];
+        let downloadStorage: 'cache' | 'upload' = 'cache';
 
         if (body.iconType === 'auto' && body.url) {
             try {
-                const domain = new URL(body.url).hostname;
-                downloadUrl = getFaviconUrl(domain);
-                initialIconType = 'upload';
-                initialCustomIconUrl = downloadUrl;
-                shouldDownload = true;
+                initialIconType = 'auto';
+                initialCustomIconUrl = '';
+                const autoIconChanged = existingSite.url !== body.url || existingSite.iconType !== 'auto';
+                if (autoIconChanged) {
+                    deleteCachedIcon(body.id);
+                    downloadUrls = getTraditionalFaviconCandidates(body.url);
+                    shouldDownload = true;
+                }
             } catch (e) { }
         } else if (body.iconType === 'upload' && body.customIconUrl) {
             if (body.customIconUrl.startsWith('http')) {
                 if (!body.customIconUrl.startsWith('/uploads/')) {
-                    downloadUrl = body.customIconUrl;
+                    downloadUrls = [body.customIconUrl];
                     shouldDownload = true;
+                    downloadStorage = 'upload';
                 }
             } else if (body.customIconUrl.startsWith('data:image')) {
                 // Handle Base64 Upload
@@ -173,9 +188,16 @@ export async function PUT(request: Request) {
             }
         });
 
-        if (shouldDownload && downloadUrl) {
-            console.log(`[Sites API] Triggering icon download for ${site.id} from ${downloadUrl}`);
-            await downloadAndSaveIcon(site.id, downloadUrl);
+        if (shouldDownload && downloadUrls.length > 0) {
+            console.log(`[Sites API] Triggering icon download for ${site.id} from ${downloadUrls.join(', ')}`);
+            const localIcon = await downloadAndSaveIcon(site.id, downloadUrls, {
+                force: shouldDownload && downloadStorage === 'cache',
+                storage: downloadStorage,
+                siteUrl: downloadStorage === 'cache' ? site.url : undefined
+            });
+            if (localIcon) {
+                return NextResponse.json(await prisma.site.findUnique({ where: { id: site.id } }));
+            }
         }
 
         return NextResponse.json(site);
@@ -200,6 +222,7 @@ export async function DELETE(request: Request) {
 
         const site = await prisma.site.findUnique({ where: { id } });
         if (site) {
+            deleteCachedIcon(site.id);
             if (site.customIconUrl) {
                 await deleteIcon(site.customIconUrl);
             }
@@ -209,6 +232,7 @@ export async function DELETE(request: Request) {
                 // Delete all children (recursively? for now just children)
                 const children = await prisma.site.findMany({ where: { parentId: id } });
                 for (const child of children) {
+                    deleteCachedIcon(child.id);
                     if (child.customIconUrl) await deleteIcon(child.customIconUrl);
                 }
                 await prisma.site.deleteMany({ where: { parentId: id } });

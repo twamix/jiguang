@@ -122,6 +122,9 @@ export function SettingsPanel({
         );
     };
     const [bingQuality, setBingQuality] = useState('uhd');
+    const [networkWallpaperUrl, setNetworkWallpaperUrl] = useState(
+        layoutSettings.bgType === 'network' ? (layoutSettings.bgUrl || '') : ''
+    );
     const { allFonts, removeFont } = useFonts();
     const [isFontPickerOpen, setIsFontPickerOpen] = useState(false);
     const [fontToDelete, setFontToDelete] = useState<any>(null);
@@ -290,6 +293,13 @@ export function SettingsPanel({
                     newColors[newName] = newColors[oldName];
                     delete newColors[oldName];
                     setCategoryColors(newColors);
+                }
+
+                if (Array.isArray(appConfig.privateModeCategories) && appConfig.privateModeCategories.includes(oldName)) {
+                    setAppConfig({
+                        ...appConfig,
+                        privateModeCategories: appConfig.privateModeCategories.map((category: string) => category === oldName ? newName : category)
+                    });
                 }
 
                 setRenamingCategory(null);
@@ -464,6 +474,60 @@ export function SettingsPanel({
         } catch (e) {
             showToast('同步出错', 'error');
         }
+    };
+
+    const normalizeNetworkWallpaperUrl = (value: string) => {
+        const trimmed = value.trim();
+        if (!trimmed) return '';
+
+        try {
+            const url = new URL(trimmed);
+            if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+                return '';
+            }
+            return url.toString();
+        } catch {
+            return '';
+        }
+    };
+
+    const applyNetworkWallpaper = (value: string, silent = false) => {
+        const url = normalizeNetworkWallpaperUrl(value);
+
+        if (!url) {
+            if (!silent && value.trim()) {
+                showToast('请输入有效的图片网址', 'error');
+            }
+            return;
+        }
+
+        setNetworkWallpaperUrl(url);
+        setLayoutSettings({
+            ...layoutSettings,
+            bgEnabled: true,
+            bgType: 'network',
+            bgUrl: url
+        });
+
+        if (!silent) {
+            showToast('网络壁纸已应用', 'success');
+        }
+    };
+
+    const handleWallpaperTypeChange = (type: string) => {
+        if (type === 'network') {
+            const url = normalizeNetworkWallpaperUrl(layoutSettings.bgUrl || networkWallpaperUrl);
+            setNetworkWallpaperUrl(url);
+            setLayoutSettings({
+                ...layoutSettings,
+                bgType: type,
+                bgEnabled: true,
+                bgUrl: url
+            });
+            return;
+        }
+
+        setLayoutSettings({ ...layoutSettings, bgType: type, bgEnabled: true });
     };
 
     const handleExport = async () => {
@@ -955,12 +1019,15 @@ export function SettingsPanel({
 
                                         {layoutSettings.bgEnabled && (
                                             <div className="space-y-5 animate-in fade-in slide-in-from-top-2">
-                                                <ToggleGroup type="single" value={layoutSettings.bgType} onValueChange={(v) => v && setLayoutSettings({ ...layoutSettings, bgType: v, bgEnabled: true })} className="w-full justify-stretch bg-slate-100 dark:bg-white/5 p-1 rounded-xl">
+                                                <ToggleGroup type="single" value={layoutSettings.bgType} onValueChange={(v) => v && handleWallpaperTypeChange(v)} className="w-full justify-stretch bg-slate-100 dark:bg-white/5 p-1 rounded-xl">
                                                     <ToggleGroupItem value="bing" className="flex-1 data-[state=on]:bg-white dark:data-[state=on]:bg-slate-700 data-[state=on]:text-indigo-500 shadow-none rounded-lg">
                                                         <Globe size={16} className="mr-2" /> Bing
                                                     </ToggleGroupItem>
                                                     <ToggleGroupItem value="custom" className="flex-1 data-[state=on]:bg-white dark:data-[state=on]:bg-slate-700 data-[state=on]:text-indigo-500 shadow-none rounded-lg">
                                                         <ImagePlus size={16} className="mr-2" /> 自定义
+                                                    </ToggleGroupItem>
+                                                    <ToggleGroupItem value="network" className="flex-1 data-[state=on]:bg-white dark:data-[state=on]:bg-slate-700 data-[state=on]:text-indigo-500 shadow-none rounded-lg">
+                                                        <ExternalLink size={16} className="mr-2" /> 网络
                                                     </ToggleGroupItem>
                                                     <ToggleGroupItem value="color" className="flex-1 data-[state=on]:bg-white dark:data-[state=on]:bg-slate-700 data-[state=on]:text-indigo-500 shadow-none rounded-lg">
                                                         <Palette size={16} className="mr-2" /> 纯色
@@ -1083,6 +1150,62 @@ export function SettingsPanel({
                                                             </div>
                                                         )}
                                                     </>
+                                                )}
+
+                                                {layoutSettings.bgType === 'network' && (
+                                                    <div className="space-y-4 animate-in fade-in">
+                                                        <div className={`p-3 rounded-xl border space-y-3 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-100'}`}>
+                                                            <div className="flex items-center gap-2">
+                                                                <ExternalLink size={16} className="text-indigo-500" />
+                                                                <span className="text-sm font-bold opacity-80">网络图片</span>
+                                                            </div>
+                                                            <div className="flex gap-2">
+                                                                <Input
+                                                                    value={networkWallpaperUrl}
+                                                                    onChange={(e) => {
+                                                                        const value = e.target.value;
+                                                                        setNetworkWallpaperUrl(value);
+                                                                    }}
+                                                                    onBlur={(e) => applyNetworkWallpaper(e.target.value, true)}
+                                                                    onKeyDown={(e) => {
+                                                                        if (e.key === 'Enter') {
+                                                                            applyNetworkWallpaper(networkWallpaperUrl);
+                                                                        }
+                                                                    }}
+                                                                    placeholder="https://example.com/wallpaper.jpg"
+                                                                    className={isDarkMode ? 'bg-slate-900 border-white/10' : 'bg-white border-slate-200'}
+                                                                />
+                                                                <Button
+                                                                    type="button"
+                                                                    onClick={() => applyNetworkWallpaper(networkWallpaperUrl)}
+                                                                    className="shrink-0"
+                                                                >
+                                                                    应用
+                                                                </Button>
+                                                            </div>
+                                                            <p className="text-xs opacity-50">请输入可直接访问的图片地址，支持 jpg、png、webp 等常见格式。</p>
+                                                        </div>
+
+                                                        {layoutSettings.bgUrl ? (
+                                                            <BackgroundPositionPreview
+                                                                imageUrl={layoutSettings.bgUrl}
+                                                                x={layoutSettings.bgX ?? 50}
+                                                                y={layoutSettings.bgY ?? 50}
+                                                                scale={layoutSettings.bgScale ?? 100}
+                                                                onChange={(x: number, y: number) => setLayoutSettings({
+                                                                    ...layoutSettings,
+                                                                    bgX: x,
+                                                                    bgY: y
+                                                                })}
+                                                            />
+                                                        ) : (
+                                                            <div className="border-2 border-dashed rounded-xl p-8 text-center opacity-60">
+                                                                <ExternalLink size={24} className="mx-auto mb-3" />
+                                                                <h5 className="font-bold text-sm mb-1">输入图片网址</h5>
+                                                                <p className="text-xs opacity-60">合法地址会自动应用为背景壁纸</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 )}
 
                                                 {/* Shared Fine Tuning Grid for both Bing and Custom */}
@@ -1804,13 +1927,91 @@ export function SettingsPanel({
                                             <Label htmlFor="private-mode" className="cursor-pointer font-medium">私有模式</Label>
                                             <p className="text-xs opacity-50">开启后访客需输入密码才能查看内容</p>
                                         </div>
-                                        <Switch id="private-mode" checked={appConfig.privateMode || false} onCheckedChange={(c) => setAppConfig({ ...appConfig, privateMode: c })} />
+                                        <Switch
+                                            id="private-mode"
+                                            checked={appConfig.privateMode || false}
+                                            onCheckedChange={(c) => setAppConfig({
+                                                ...appConfig,
+                                                privateMode: c,
+                                                privateModeScope: appConfig.privateModeScope || 'global',
+                                                privateModeCategories: Array.isArray(appConfig.privateModeCategories) ? appConfig.privateModeCategories : []
+                                            })}
+                                        />
                                     </div>
 
                                     {/* Private Password Setting */}
                                     {appConfig.privateMode && (
                                         <div className={`p-4 rounded-xl border animate-in slide-in-from-top-2 ${isDarkMode ? 'bg-indigo-500/10 border-indigo-500/20' : 'bg-indigo-50 border-indigo-100'}`}>
                                             <div className="space-y-3">
+                                                <div className="space-y-3 pb-3 border-b border-indigo-500/10">
+                                                    <div className="flex items-center justify-between gap-3">
+                                                        <div className="space-y-0.5">
+                                                            <span className="text-sm font-bold text-indigo-500">作用范围</span>
+                                                            <p className="text-xs opacity-60">选择访问密码保护整个站点，或只保护指定分类。</p>
+                                                        </div>
+                                                        <ToggleGroup
+                                                            type="single"
+                                                            value={appConfig.privateModeScope || 'global'}
+                                                            onValueChange={(v) => v && setAppConfig({
+                                                                ...appConfig,
+                                                                privateModeScope: v,
+                                                                privateModeCategories: Array.isArray(appConfig.privateModeCategories) ? appConfig.privateModeCategories : []
+                                                            })}
+                                                            className="shrink-0 bg-white/70 dark:bg-black/20 p-1 rounded-xl"
+                                                        >
+                                                            <ToggleGroupItem value="global" className="h-8 px-3 text-xs data-[state=on]:bg-indigo-500 data-[state=on]:text-white rounded-lg">全局</ToggleGroupItem>
+                                                            <ToggleGroupItem value="categories" className="h-8 px-3 text-xs data-[state=on]:bg-indigo-500 data-[state=on]:text-white rounded-lg">分类</ToggleGroupItem>
+                                                        </ToggleGroup>
+                                                    </div>
+
+                                                    {(appConfig.privateModeScope || 'global') === 'categories' && (
+                                                        <div className={`rounded-xl border p-3 space-y-2 ${isDarkMode ? 'bg-slate-900/50 border-white/10' : 'bg-white border-indigo-100'}`}>
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="text-xs font-bold opacity-70">受保护分类</span>
+                                                                <span className="text-[10px] opacity-50">
+                                                                    {(appConfig.privateModeCategories || []).length}/{categories.length}
+                                                                </span>
+                                                            </div>
+                                                            {categories.length === 0 ? (
+                                                                <p className="text-xs opacity-50 py-2">暂无可选择的分类</p>
+                                                            ) : (
+                                                                <div className="grid grid-cols-2 gap-2">
+                                                                    {categories.map((cat) => {
+                                                                        const selectedCategories = Array.isArray(appConfig.privateModeCategories) ? appConfig.privateModeCategories : [];
+                                                                        const checked = selectedCategories.includes(cat);
+                                                                        return (
+                                                                            <button
+                                                                                key={cat}
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    const nextCategories = checked
+                                                                                        ? selectedCategories.filter((item: string) => item !== cat)
+                                                                                        : [...selectedCategories, cat];
+                                                                                    setAppConfig({
+                                                                                        ...appConfig,
+                                                                                        privateModeScope: 'categories',
+                                                                                        privateModeCategories: nextCategories
+                                                                                    });
+                                                                                }}
+                                                                                className={`h-9 min-w-0 px-3 rounded-lg border text-xs font-medium flex items-center justify-between gap-2 transition-all ${checked
+                                                                                    ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm'
+                                                                                    : (isDarkMode ? 'bg-white/5 border-white/10 hover:bg-white/10' : 'bg-slate-50 border-slate-200 hover:bg-white')
+                                                                                    }`}
+                                                                            >
+                                                                                <span className="truncate">{cat}</span>
+                                                                                {checked && <Check size={14} className="shrink-0" />}
+                                                                            </button>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            )}
+                                                            <p className="text-[10px] opacity-60">
+                                                                未验证访客在“全部”中不会看到这些分类内容，进入受保护分类时需要输入访问密码。
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                </div>
+
                                                 <div className="flex items-center gap-2">
                                                     <Lock size={16} className="text-indigo-500" />
                                                     <span className="text-sm font-bold text-indigo-500">访问密码</span>

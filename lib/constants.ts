@@ -106,7 +106,9 @@ export const DEFAULT_APP_CONFIG = {
         headerLayout: 'column', // 'column' | 'row'
         footerLayout: 'column'  // 'column' | 'row'
     },
-    privateMode: false // 私有模式：访客需要输入密码才能查看
+    privateMode: false, // 私有模式：访客需要输入密码才能查看
+    privateModeScope: 'global', // 'global' | 'categories'
+    privateModeCategories: [] as string[]
 };
 
 // New: Fresh & Elegant Colors for Pure Background
@@ -156,7 +158,7 @@ export const DEFAULT_LAYOUT_SETTINGS = {
     stickyFooter: false,
     bgEnabled: false,
     bgUrl: '',
-    bgType: 'bing', // 'bing' | 'custom' | 'color'
+    bgType: 'bing', // 'bing' | 'custom' | 'network' | 'color'
     bgColor: '#F8FAFC', // Default pure background color
     bgOpacity: 40, // Mask opacity
     fontFamily: 'system',

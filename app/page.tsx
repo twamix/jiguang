@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { NoiseOverlay } from './components/ui/NoiseOverlay';
 import {
   Search, Settings, Plus, LogIn, LogOut, LayoutGrid, Edit3, Trash2,
@@ -37,6 +37,7 @@ import { HtmlEditModal } from '@/app/components/modals/HtmlEditModal';
 import { AccountSettingsModal } from '@/app/components/modals/AccountSettingsModal';
 import { CategoryPill } from '@/app/components/ui/CategoryPill';
 import { useFonts } from '@/app/hooks/useFonts';
+import { getUploadUrl } from '@/lib/upload-url';
 
 // --- dnd-kit Imports ---
 import {
@@ -75,7 +76,7 @@ import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 import {
-  getAccessibleTextColor, shouldUseTextShadow, hexToRgb, generateId, translateCity, FAVICON_PROVIDERS, getSimpleFaviconUrl, formatDate,
+  getAccessibleTextColor, shouldUseTextShadow, hexToRgb, generateId, translateCity, formatDate,
   NOISE_BASE64, HARMONIOUS_COLORS, getRandomColor, SEARCH_ENGINES
 } from '@/lib/utils';
 
@@ -158,6 +159,7 @@ export default function AuroraNav() {
   const [isEngineMenuOpen, setIsEngineMenuOpen] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
 
   // Context Menu State
   const [searchEngine, setSearchEngine] = useState('Google');
@@ -199,6 +201,7 @@ export default function AuroraNav() {
       if (!ticking) {
         window.requestAnimationFrame(() => {
           setIsScrolled(window.scrollY > 20);
+          setShowBackToTop(window.scrollY > 480);
           ticking = false;
         });
         ticking = true;
@@ -381,8 +384,38 @@ export default function AuroraNav() {
     if (!isLoggedIn) localStorage.removeItem('aurora_is_logged_in');
   }, [isLoggedIn]);
   useEffect(() => {
-    document.title = appConfig.siteTitle;
-  }, [appConfig.siteTitle]);
+    const config = appConfig as any;
+    const title = typeof config.siteTitle === 'string' && config.siteTitle.trim()
+      ? config.siteTitle.trim()
+      : '极光导航';
+    const description = typeof config.siteDescription === 'string' && config.siteDescription.trim()
+      ? config.siteDescription.trim()
+      : title;
+
+    document.title = title;
+
+    let metaDescription = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
+    if (!metaDescription) {
+      metaDescription = document.createElement('meta');
+      metaDescription.name = 'description';
+      document.head.appendChild(metaDescription);
+    }
+    metaDescription.content = description;
+
+    const logoImage = typeof config.logoImage === 'string' ? config.logoImage.trim() : '';
+    const faviconUrl = logoImage ? getUploadUrl(logoImage) : '/icon.png';
+    document.querySelectorAll('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]').forEach(link => link.remove());
+
+    const favicon = document.createElement('link');
+    favicon.rel = 'icon';
+    favicon.href = faviconUrl;
+    document.head.appendChild(favicon);
+
+    const shortcutIcon = document.createElement('link');
+    shortcutIcon.rel = 'shortcut icon';
+    shortcutIcon.href = faviconUrl;
+    document.head.appendChild(shortcutIcon);
+  }, [appConfig]);
 
   const settingsSyncLock = useRef(false);
   const categoriesSyncLock = useRef(false);
@@ -1018,6 +1051,9 @@ export default function AuroraNav() {
 
   const filteredSites = useMemo(() => {
     let result = sites;
+    const protectedCategories = Array.isArray(appConfig.privateModeCategories) ? appConfig.privateModeCategories : [];
+    const isCategoryScopedPrivateMode = appConfig.privateMode && appConfig.privateModeScope === 'categories';
+    const shouldHideProtectedCategories = isCategoryScopedPrivateMode && !isLoggedIn && !isGuestVerified;
 
     if (searchQuery) {
       result = sites.filter((site: any) =>
@@ -1040,16 +1076,33 @@ export default function AuroraNav() {
       }
     }
 
-    if (!appConfig.privateMode) return result;
+    if (shouldHideProtectedCategories) {
+      result = result.filter((site: any) => !protectedCategories.includes(site.category));
+    }
+
+    if (!appConfig.privateMode || appConfig.privateModeScope === 'categories') return result;
     if (isGuestVerified) return result;
     return result.filter((site: any) => !site.isHidden);
-  }, [sites, searchQuery, activeTab, appConfig.privateMode, isGuestVerified, currentFolderId]);
+  }, [sites, searchQuery, activeTab, appConfig.privateMode, appConfig.privateModeScope, appConfig.privateModeCategories, isLoggedIn, isGuestVerified, currentFolderId]);
 
   const activeDragSite = activeDragId ? sites.find(s => s.id === activeDragId) : null;
   const containerClass = layoutSettings.isWideMode ? 'max-w-[98%] px-6' : 'max-w-7xl px-4';
   const currentEngine = SEARCH_ENGINES.find(e => e.id === currentEngineId) || SEARCH_ENGINES[0];
   const showFooter = layoutSettings.showFooter ?? true;
   const isSearching = !!searchQuery.trim() && currentEngineId === 'local';
+  const protectedCategories = Array.isArray(appConfig.privateModeCategories) ? appConfig.privateModeCategories : [];
+  const isCategoryScopedPrivateMode = appConfig.privateMode && appConfig.privateModeScope === 'categories';
+  const currentFolder = currentFolderId ? sites.find((site: any) => site.id === currentFolderId) : null;
+  const activeProtectedCategory = currentFolder?.category || (activeTab !== '全部' ? activeTab : '');
+  const isCurrentCategoryLocked = isCategoryScopedPrivateMode
+    && !isLoggedIn
+    && !isGuestVerified
+    && Boolean(activeProtectedCategory)
+    && protectedCategories.includes(activeProtectedCategory);
+  const shouldShowGlobalPrivateLock = appConfig.privateMode
+    && appConfig.privateModeScope !== 'categories'
+    && !isLoggedIn
+    && !isGuestVerified;
   // Fix: Use allFonts (including custom) to find the family
   const currentFontFamily = allFonts.find(f => f.id === layoutSettings.fontFamily)?.family || 'sans-serif';
 
@@ -1057,6 +1110,33 @@ export default function AuroraNav() {
   const getCategoryColor = (cat: string) => {
     if (cat === '全部') return '#6366F1'; // Default Indigo
     return categoryColors[cat] || '#6366F1';
+  };
+
+  const verifyPrivateAccess = async (password: string) => {
+    try {
+      const res = await fetch('/api/auth/private/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setIsGuestVerified(true);
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('aurora_guest_verified', 'true');
+          }
+          return true;
+        }
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
@@ -1096,31 +1176,10 @@ export default function AuroraNav() {
           </div>
         ) : (
           <>
-            {appConfig.privateMode && !isLoggedIn && !isGuestVerified ? (
+            {shouldShowGlobalPrivateLock ? (
               <PrivateModeScreen
                 isDarkMode={isDarkMode}
-                onVerify={async (password: string) => {
-                  try {
-                    const res = await fetch('/api/auth/private/verify', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ password })
-                    });
-                    if (res.ok) {
-                      const data = await res.json();
-                      if (data.success) {
-                        setIsGuestVerified(true);
-                        if (typeof window !== 'undefined') {
-                          sessionStorage.setItem('aurora_guest_verified', 'true');
-                        }
-                        return true;
-                      }
-                    }
-                    return false;
-                  } catch {
-                    return false;
-                  }
-                }}
+                onVerify={verifyPrivateAccess}
                 appConfig={appConfig}
               />
             ) : (
@@ -1344,31 +1403,42 @@ export default function AuroraNav() {
                         </div>
                       )}
 
-                      <SiteGrid
-                        isLoading={isLoading}
-                        filteredSites={filteredSites}
-                        isSearching={!!searchQuery}
-                        activeTab={activeTab}
-                        categories={categories}
-                        hiddenCategories={hiddenCategories}
-                        layoutSettings={layoutSettings}
-                        isDarkMode={isDarkMode}
-                        isLoggedIn={isLoggedIn}
-                        onEdit={(site: any) => {
-                          setEditingSite(site);
-                          setIsModalOpen(true);
-                        }}
-                        onDelete={(site: any) => {
-                          setDeleteSite(site);
-                          setDeleteContents(false);
-                          setIsConfirmationOpen(true);
-                        }}
-                        onContextMenu={handleContextMenu}
-                        getCategoryColor={getCategoryColor}
-                        onFolderClick={(folder: any) => setCurrentFolderId(folder.id)}
-                        sites={sites} // Pass sites for folder count
-                        dragOverFolderId={dragOverFolderId} // Visual feedback for folder drop targets
-                      />
+                      {isCurrentCategoryLocked ? (
+                        <PrivateModeScreen
+                          isDarkMode={isDarkMode}
+                          onVerify={verifyPrivateAccess}
+                          appConfig={appConfig}
+                          variant="inline"
+                          title={`${activeProtectedCategory} 已受保护`}
+                          description="请输入访问密码以查看此分类内容"
+                        />
+                      ) : (
+                        <SiteGrid
+                          isLoading={isLoading}
+                          filteredSites={filteredSites}
+                          isSearching={!!searchQuery}
+                          activeTab={activeTab}
+                          categories={categories}
+                          hiddenCategories={hiddenCategories}
+                          layoutSettings={layoutSettings}
+                          isDarkMode={isDarkMode}
+                          isLoggedIn={isLoggedIn}
+                          onEdit={(site: any) => {
+                            setEditingSite(site);
+                            setIsModalOpen(true);
+                          }}
+                          onDelete={(site: any) => {
+                            setDeleteSite(site);
+                            setDeleteContents(false);
+                            setIsConfirmationOpen(true);
+                          }}
+                          onContextMenu={handleContextMenu}
+                          getCategoryColor={getCategoryColor}
+                          onFolderClick={(folder: any) => setCurrentFolderId(folder.id)}
+                          sites={sites} // Pass sites for folder count
+                          dragOverFolderId={dragOverFolderId} // Visual feedback for folder drop targets
+                        />
+                      )}
                     </div>
                   </main>
 
@@ -1388,6 +1458,30 @@ export default function AuroraNav() {
             )}
           </>
         )}
+
+        <AnimatePresence>
+          {showBackToTop && !isSearchFocused && (
+            <motion.button
+              key="back-to-top"
+              type="button"
+              aria-label="回到顶部"
+              title="回到顶部"
+              onClick={scrollToTop}
+              initial={{ opacity: 0, x: 16, scale: 0.92 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 16, scale: 0.92 }}
+              whileHover={{ scale: 1.06, y: -2 }}
+              whileTap={{ scale: 0.94 }}
+              transition={{ duration: 0.2 }}
+              className={`fixed right-4 sm:right-6 ${showFooter && layoutSettings.stickyFooter ? 'bottom-24' : 'bottom-6'} z-[60] flex h-11 w-11 items-center justify-center rounded-2xl border shadow-xl backdrop-blur-xl transition-colors ${isDarkMode
+                ? 'border-white/10 bg-slate-900/75 text-slate-100 shadow-black/30 hover:bg-slate-800/90'
+                : 'border-white/70 bg-white/80 text-slate-700 shadow-slate-900/10 hover:bg-white'
+                }`}
+            >
+              <ArrowUp size={20} strokeWidth={2.4} />
+            </motion.button>
+          )}
+        </AnimatePresence>
 
         <DragOverlay style={{ transformOrigin: '0 0 ' }}>
           {activeDragSite ? (
@@ -1548,6 +1642,12 @@ export default function AuroraNav() {
               if (res.ok) {
                 setCategories(prev => prev.filter(c => c !== confirmingDeleteCategory));
                 setSites(prev => prev.filter(s => s.category !== confirmingDeleteCategory));
+                setAppConfig((prev: any) => ({
+                  ...prev,
+                  privateModeCategories: Array.isArray(prev.privateModeCategories)
+                    ? prev.privateModeCategories.filter((category: string) => category !== confirmingDeleteCategory)
+                    : []
+                }));
                 setConfirmingDeleteCategory(null);
                 showToast('分类已删除', 'success');
               } else {
@@ -1694,5 +1794,3 @@ function Toast({ notification, onClose, isDarkMode }: any) {
 
 
 // Updated CategoryPill to support Custom Colors
-
-

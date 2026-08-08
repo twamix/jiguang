@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { downloadAndSaveIcon } from '@/lib/icon-downloader';
+import { downloadAndSaveIcon, getCachedIconPath, getTraditionalFaviconCandidates } from '@/lib/icon-downloader';
 import fs from 'fs';
 import path from 'path';
 import { requireAdmin } from '@/lib/auth';
 
-
-const getFaviconUrl = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
 
 export const dynamic = 'force-dynamic';
 
@@ -45,7 +43,7 @@ export async function POST(request: Request) {
         for (let i = 0; i < sites.length; i += BATCH_SIZE) {
             const batch = sites.slice(i, i + BATCH_SIZE);
         await Promise.all(batch.map(async (site: { id: string; url: string | null; iconType: string | null; icon: string | null }) => {
-                let downloadUrl = '';
+                let downloadUrls: string[] = [];
                 let shouldDownload = false;
 
                 const isAuto = site.iconType === 'auto' || !site.iconType;
@@ -54,21 +52,17 @@ export async function POST(request: Request) {
 
                 if (site.url) {
                     try {
-                        const domain = new URL(site.url).hostname;
-                        const potentialDlUrl = getFaviconUrl(domain);
+                        const faviconCandidates = getTraditionalFaviconCandidates(site.url);
 
                         if (isAuto) {
-                            // Logic: If isAuto, generally we sync. 
-                            // Optimization: If local file already exists and looks valid?
-                            // Current behavior: Auto always re-syncs to ensure freshness.
-                            downloadUrl = potentialDlUrl;
-                            shouldDownload = true;
+                            shouldDownload = !getCachedIconPath(site.id);
+                            if (shouldDownload) downloadUrls = faviconCandidates;
                         } else if (isUpload) {
                             // Smart Repair Logic
 
                             // 1. If it's a remote Google URL (or other remote), we should cache it.
                             if (currentIcon.includes('google.com/s2/favicons') || currentIcon.startsWith('http')) {
-                                downloadUrl = currentIcon.includes('google.com/s2/favicons') ? currentIcon : potentialDlUrl;
+                                downloadUrls = [currentIcon, ...faviconCandidates];
                                 // Note: If it's a random http image, we might not be able to auto-download it easily without more logic.
                                 // For safely, if it's google favicon, we know how to handle.
                                 // If it's just http, we might want to leave it? 
@@ -79,17 +73,17 @@ export async function POST(request: Request) {
                             else if (currentIcon.startsWith('/uploads/')) {
                                 // Remove query params for check
                                 const cleanPath = currentIcon.split('?')[0];
-                                const fullPath = path.join(publicDir, cleanPath);
+                                const fullPath = path.join(publicDir, cleanPath.replace(/^\/+/, ''));
                                 if (!fs.existsSync(fullPath)) {
                                     // File missing, download it again
                                     // Fallback to auto-favicon
-                                    downloadUrl = potentialDlUrl;
+                                    downloadUrls = faviconCandidates;
                                     shouldDownload = true;
                                 }
                             }
                             // 3. If empty, download
                             else if (!currentIcon) {
-                                downloadUrl = potentialDlUrl;
+                                downloadUrls = faviconCandidates;
                                 shouldDownload = true;
                             }
                         }
@@ -99,8 +93,11 @@ export async function POST(request: Request) {
                 if (shouldDownload) {
                     if (analyze) {
                         toSyncCount++;
-                    } else if (downloadUrl) {
-                        const result = await downloadAndSaveIcon(site.id, downloadUrl);
+                    } else if (downloadUrls.length > 0) {
+                        const result = await downloadAndSaveIcon(site.id, downloadUrls, {
+                            storage: isUpload ? 'upload' : 'cache',
+                            siteUrl: site.url || undefined
+                        });
                         if (result) {
                             successCount++;
                         } else {

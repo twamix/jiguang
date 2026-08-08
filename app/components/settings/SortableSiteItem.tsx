@@ -3,9 +3,10 @@ import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Trash2, Edit3, Eye, EyeOff, ChevronRight, ChevronDown, FolderOpen, Folder, Plus } from 'lucide-react';
 import NextImage from 'next/image';
-import { FAVICON_PROVIDERS, hexToRgb } from '@/lib/utils';
+import { hexToRgb } from '@/lib/utils';
 import { ICON_MAP } from '@/lib/constants';
 import { useOnlineStatus } from '@/app/hooks/useOnlineStatus';
+import { getUploadUrl } from '@/lib/upload-url';
 // SiteCard imports: import { hexToRgb, getAccessibleTextColor, shouldUseTextShadow, FAVICON_PROVIDERS } from '@/lib/utils';
 // SiteCard imports: import { ICON_MAP, FONTS } from '@/lib/constants';
 import { Globe } from 'lucide-react';
@@ -45,12 +46,10 @@ export function SortableSiteItem({ site, sites, isDarkMode, onEdit, onDelete, on
     // Icon Logic (Simplified from SiteCard)
     // Icon Logic (Standardized with SiteCard)
     const Icon = ICON_MAP[site.icon] || Globe;
-    const [iconState, setIconState] = useState(0);
     const [hasError, setHasError] = useState(false);
 
     // Reset state when icon config changes
     React.useEffect(() => {
-        setIconState(0);
         setHasError(false);
     }, [site.url, site.iconType, site.customIconUrl, site.icon, isOnline]);
 
@@ -60,37 +59,14 @@ export function SortableSiteItem({ site, sites, isDarkMode, onEdit, onDelete, on
 
     if (site.type !== 'folder') {
         if (site.iconType === 'auto') {
-            // Auto: Cache -> Online
-            const hasLocalCache = site.icon && (site.icon.startsWith('/') || site.icon.startsWith('http'));
-
-            if (!hasError && hasLocalCache) {
-                currentSrc = site.icon;
+            if (!hasError && site.id) {
+                currentSrc = `/api/sites/${encodeURIComponent(site.id)}/icon?v=${encodeURIComponent(site.updatedAt || site.icon || '')}`;
                 showImage = true;
-            } else {
-                // Online Fetch (Providers) - only if URL is valid
-                const hasValidUrl = site.url && site.url.trim() && site.url !== '#';
-                if (isOnline && hasValidUrl) {
-                    let providerIndex = iconState;
-                    if (hasLocalCache) {
-                        providerIndex = iconState - 1;
-                    }
-
-                    if (providerIndex >= 0 && providerIndex < FAVICON_PROVIDERS.length) {
-                        try {
-                            const domain = new URL(site.url).hostname;
-                            // Don't fetch for localhost or invalid domains
-                            if (domain && domain !== 'localhost' && domain.includes('.')) {
-                                currentSrc = FAVICON_PROVIDERS[providerIndex](domain);
-                                showImage = true;
-                            }
-                        } catch (e) { }
-                    }
-                }
             }
         } else if (site.iconType === 'upload') {
             // Upload: File -> Text
             if (site.customIconUrl && !hasError) {
-                currentSrc = site.customIconUrl;
+                currentSrc = getUploadUrl(site.customIconUrl);
                 showImage = true;
             }
         }
@@ -109,7 +85,6 @@ export function SortableSiteItem({ site, sites, isDarkMode, onEdit, onDelete, on
                     unoptimized
                     onError={() => {
                         setHasError(true);
-                        setIconState(prev => prev + 1);
                     }}
                 />
             </div>
