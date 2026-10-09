@@ -9,7 +9,7 @@ const UPLOADED_ICONS_DIR = path.join(process.cwd(), 'public', 'uploads', 'icons'
 const MAX_ICON_REDIRECTS = 3;
 const MAX_ICON_BYTES = 1024 * 1024;
 const MAX_HTML_BYTES = 2 * 1024 * 1024;
-const ICON_EXTENSIONS = ['png', 'jpg', 'gif', 'webp', 'avif', 'bmp', 'ico'];
+const ICON_EXTENSIONS = ['png', 'jpg', 'gif', 'webp', 'avif', 'bmp', 'ico', 'svg'];
 const iconDownloads = new Map<string, Promise<string | null>>();
 
 const FAVICON_PROVIDERS = [
@@ -108,6 +108,11 @@ function getIconFormat(buffer: Buffer) {
     if (buffer.length >= 4 && buffer[0] === 0 && buffer[1] === 0 && buffer[2] === 1 && buffer[3] === 0) {
         return { extension: 'ico', contentType: 'image/x-icon' };
     }
+    const svg = buffer.toString('utf8').replace(/^\uFEFF/, '').trim();
+    if (/^(?:<\?xml[^>]*>\s*)?(?:<!--[^]*?-->\s*)*<svg\b[^>]*>/i.test(svg)
+        && /<\/svg\s*>\s*$|<svg\b[^>]*\/\s*>\s*$/i.test(svg)) {
+        return { extension: 'svg', contentType: 'image/svg+xml' };
+    }
     return null;
 }
 
@@ -181,8 +186,8 @@ function extractDeclaredFaviconUrls(html: string, pageUrl: URL) {
         try {
             const size = Math.max(...(attributes.sizes || '').match(/\d+/g)?.map(Number) || [0]);
             const relScore = rel.includes('icon') ? 0 : rel.includes('apple-touch-icon') ? 1000 : 2000;
-            const svgPenalty = attributes.type?.includes('svg') || href.toLowerCase().includes('.svg') ? 500 : 0;
-            candidates.push({ url: new URL(href, baseUrl).toString(), score: relScore + svgPenalty - size });
+            const scalableSize = attributes.sizes === 'any' ? 512 : size;
+            candidates.push({ url: new URL(href, baseUrl).toString(), score: relScore - scalableSize });
         } catch { }
     }
 
@@ -206,7 +211,31 @@ export async function discoverDeclaredFaviconCandidates(input: string) {
             const htmlBuffer = Buffer.from(await response.arrayBuffer());
             if (htmlBuffer.length <= MAX_HTML_BYTES) {
                 const finalPageUrl = response.url ? new URL(response.url) : pageUrl;
-                declaredCandidates = extractDeclaredFaviconUrls(htmlBuffer.toString('utf8'), finalPageUrl);
+                const html = htmlBuffer.toString('utf8');
+                declaredCandidates = extractDeclaredFaviconUrls(html, finalPageUrl);
+                // These panels replace the tab favicon with their configured logo at runtime.
+                // Do not probe arbitrary sites or treat unrelated status JSON as branding.
+                if (/<title[^>]*>\s*(?:New API|One API|Veloera)\s*<\/title>/i.test(html)) {
+                    try {
+                        const statusUrl = new URL('/api/status', finalPageUrl);
+                        const status = await fetchIcon(statusUrl.href, { accept: 'application/json', destination: 'document' });
+                        if (status.ok && /application\/json/i.test(status.headers.get('content-type') || '')
+                            && Number(status.headers.get('content-length') || 0) <= MAX_HTML_BYTES) {
+                            const body = Buffer.from(await status.arrayBuffer());
+                            if (body.length <= MAX_HTML_BYTES) {
+                                const config = JSON.parse(body.toString('utf8'));
+                                const data = config?.data;
+                                if (config?.success === true && typeof data?.system_name === 'string'
+                                    && typeof data?.version === 'string' && typeof data?.logo === 'string' && data.logo.trim()) {
+                                    const logo = new URL(data.logo.trim(), statusUrl);
+                                    if (['http:', 'https:'].includes(logo.protocol)) declaredCandidates.unshift(logo.href);
+                                }
+                            }
+                        }
+                    } catch {
+                        // Static favicon discovery must still work if the status endpoint fails.
+                    }
+                }
             }
         }
     } catch (error) {
@@ -251,12 +280,13 @@ export async function downloadAndSaveIcon(
             await mkdir(targetDirectory, { recursive: true });
         }
 
-        // Optimization: Check if we already have this icon for this site
-        // Actually, for "Sync" action, we likely WANT to overwrite. 
-        // But if just creating, maybe not. 
-        // Given the function is called "downloadAndSave", strictly doing so is correct.
-        // If we want optimization, caller should decide. 
-        // But for safety/consistency with previous logic, let's just download.
+        // A page's declared icon is authoritative; guessed /favicon.ico may be a stale template.
+        // Keep an explicitly supplied upload URL ahead of automatic discovery.
+        if (storage === 'cache' && options.siteUrl) {
+            const declared = await discoverDeclaredFaviconCandidates(options.siteUrl);
+            const candidates = Array.from(new Set([...declared, ...iconUrls]));
+            iconUrls.splice(0, iconUrls.length, ...candidates);
+        }
 
         const attemptedUrls = new Set<string>();
         let fallbackPhase = 0;
@@ -267,7 +297,7 @@ export async function downloadAndSaveIcon(
                 if (!options.siteUrl || fallbackPhase >= 2) break;
 
                 const fallbackUrls = fallbackPhase === 0
-                    ? await discoverDeclaredFaviconCandidates(options.siteUrl)
+                    ? (storage === 'cache' ? [] : await discoverDeclaredFaviconCandidates(options.siteUrl))
                     : getFaviconProviderCandidates(options.siteUrl);
                 fallbackPhase += 1;
 
@@ -388,14 +418,16 @@ export async function deleteIcon(customIconUrl: string) {
 export async function saveBase64Icon(siteId: string, base64String: string) {
     try {
         // Extract content type and data
-        const matches = base64String.match(/^data:image\/([a-zA-Z+]+);base64,(.+)$/);
+        const matches = base64String.match(/^data:image\/([a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$/);
         if (!matches || matches.length !== 3) {
             return null;
         }
 
-        const ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
-        const data = matches[2];
-        const buffer = Buffer.from(data, 'base64');
+        const buffer = Buffer.from(matches[2], 'base64');
+        if (!buffer.length || buffer.length > MAX_ICON_BYTES) return null;
+        const format = getIconFormat(buffer);
+        if (!format) return null;
+        const ext = format.extension;
 
         const filename = `site-${siteId}.${ext}`;
         const filepath = path.join(UPLOADED_ICONS_DIR, filename);

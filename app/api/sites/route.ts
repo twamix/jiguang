@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { downloadAndSaveIcon, saveBase64Icon, deleteCachedIcon, deleteIcon, getTraditionalFaviconCandidates } from '@/lib/icon-downloader';
@@ -9,6 +10,7 @@ export async function POST(request: Request) {
         if (unauthorized) return unauthorized;
 
         const body = await request.json();
+        const siteId = typeof body.id === 'string' && body.id ? body.id : randomUUID();
 
         let initialIconType = body.iconType;
         let initialCustomIconUrl = body.customIconUrl;
@@ -34,7 +36,7 @@ export async function POST(request: Request) {
                 downloadStorage = 'upload';
             } else if (body.customIconUrl.startsWith('data:image')) {
                 // Handle Base64 Upload immediately
-                const savedPath = await saveBase64Icon(body.id || 'temp', body.customIconUrl);
+                const savedPath = await saveBase64Icon(siteId, body.customIconUrl);
                 if (savedPath) {
                     initialCustomIconUrl = savedPath;
                 }
@@ -44,8 +46,7 @@ export async function POST(request: Request) {
         const site = await prisma.site.create({
 
             data: {
-                // Only include id if it's a non-null, non-empty string
-                ...(body.id && typeof body.id === 'string' ? { id: body.id } : {}),
+                id: siteId,
                 name: body.name || 'New Site', // Ensure string
                 // url removed here, handled at bottom
                 desc: body.desc,
@@ -70,11 +71,6 @@ export async function POST(request: Request) {
 
         console.log(`[Sites API] Created ${site.type}: ${site.id} (${site.name})`);
 
-        // If we used a temp ID for filename, we might want to rename it, but it's fine for now.
-        // Ideally we should use the real ID.
-        // If we saved base64 with 'temp', we can't easily rename without FS ops.
-        // Optimization: If we really want the ID in filename, we'd need to create site first then save file then update site.
-        // But for now, let's just use the timestamp in filename which is unique enough.
 
         // Handle download - await it to ensure it completes, or log error
         // Note: In Vercel serverless this might still time out if too long, but for local/VPS it's better to await or use waitUntil

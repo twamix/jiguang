@@ -41,6 +41,7 @@ function serveCachedIcon(filePath: string) {
         '.jpg': 'image/jpeg',
         '.webp': 'image/webp',
         '.ico': 'image/x-icon',
+        '.svg': 'image/svg+xml',
     };
 
     return new NextResponse(fs.readFileSync(filePath), {
@@ -48,6 +49,8 @@ function serveCachedIcon(filePath: string) {
             'Content-Type': contentTypes[extension] || 'application/octet-stream',
             'Content-Length': fs.statSync(filePath).size.toString(),
             'Cache-Control': 'public, max-age=86400',
+            'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+            'X-Content-Type-Options': 'nosniff',
         },
     });
 }
