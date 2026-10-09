@@ -46,13 +46,16 @@ export async function GET(
         };
         const contentType = mimeTypes[ext] || 'application/octet-stream';
 
-        // Return file with proper headers
+        // Return file with proper headers.
+        // Sandbox + nosniff prevent an uploaded SVG from executing scripts same-origin.
         return new NextResponse(fileBuffer, {
             status: 200,
             headers: {
                 'Content-Type': contentType,
                 'Content-Length': stats.size.toString(),
                 'Cache-Control': 'public, max-age=86400', // Cache for 1 day
+                'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+                'X-Content-Type-Options': 'nosniff',
             },
         });
     } catch (error) {

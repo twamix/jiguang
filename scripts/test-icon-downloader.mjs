@@ -82,9 +82,17 @@ try {
     assert.notEqual(first, second);
     assert.equal(await api.saveBase64Icon('bad', `data:image/png;base64,${Buffer.from('<html>not an image</html>').toString('base64')}`), null);
     assert.equal(await api.saveBase64Icon('large', `data:image/png;base64,${Buffer.alloc(1024 * 1024 + 1).toString('base64')}`), null);
+    // Re-uploading with a different format drops the stale file so only one icon remains per site.
+    const iconsDir = path.join(root, 'public', 'uploads', 'icons');
+    await api.saveBase64Icon('switch', dataUrl);
+    assert.ok(fs.existsSync(path.join(iconsDir, 'site-switch.svg')));
+    const switched = await api.saveBase64Icon('switch', `data:image/png;base64,${png.toString('base64')}`);
+    assert.ok(switched.includes('site-switch.png?'));
+    assert.ok(!fs.existsSync(path.join(iconsDir, 'site-switch.svg')));
+    assert.deepEqual(fs.readdirSync(iconsDir).filter((f) => f.startsWith('site-switch.')), ['site-switch.png']);
     api.deleteCachedIcon('dynamic');
     assert.equal(api.getCachedIconPath('dynamic'), null);
-    console.log('PASS: favicon priority, runtime logo, SVG, fallback, manual URL, upload isolation, invalid/oversize rejection, cache deletion');
+    console.log('PASS: favicon priority, runtime logo, SVG, fallback, manual URL, upload isolation, extension switch cleanup, invalid/oversize rejection, cache deletion');
 } finally {
     fs.rmSync(root, { recursive: true, force: true });
 }

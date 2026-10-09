@@ -435,6 +435,13 @@ export async function saveBase64Icon(siteId: string, base64String: string) {
         const publicPath = `/uploads/icons/${filename}?v=${Date.now()}`;
 
         fs.writeFileSync(filepath, buffer);
+
+        // Remove any previous upload for this site that used a different extension.
+        for (const extension of ICON_EXTENSIONS) {
+            const oldPath = path.join(UPLOADED_ICONS_DIR, `site-${siteId}.${extension}`);
+            if (oldPath !== filepath && fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        }
+
         console.log(`Base64 icon saved for site ${siteId}: ${publicPath}`);
 
         return publicPath;
