@@ -522,17 +522,15 @@ export default function AuroraNav() {
 
 
   // --- Wallpaper Logic ---
+  // Runs automatically on page load; stay silent so it never interrupts browsing.
   const handleSyncBing = async () => {
     try {
-      showToast('正在同步 Bing 壁纸...', 'loading');
       const res = await fetch('/api/wallpapers/bing', { method: 'POST' });
-      if (res.ok) {
-        showToast('同步成功', 'success');
-      } else {
-        showToast('同步失败', 'error');
+      if (!res.ok) {
+        console.error('[Bing Sync] Failed:', res.status, res.statusText);
       }
     } catch (e) {
-      showToast('同步出错', 'error');
+      console.error('[Bing Sync] Error:', e);
     }
   };
 
