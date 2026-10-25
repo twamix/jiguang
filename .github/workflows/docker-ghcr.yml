@@ -117,9 +117,20 @@ jobs:
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
         run: |
-          docker buildx imagetools create \
-            $(printf -- '--tag %s ' ${TAGS}) \
-            $(printf -- '${REGISTRY}/${IMAGE_NAME}@sha256:%s ' *)
+          set -eux
+          echo "TAGS=$TAGS"
+          ls -la
+          ARGS=()
+          while IFS= read -r tag; do
+            [ -n "$tag" ] && ARGS+=(--tag "$tag")
+          done <<< "$TAGS"
+          SOURCES=()
+          for digest_file in *; do
+            SOURCES+=("${REGISTRY}/${IMAGE_NAME}@sha256:${digest_file}")
+          done
+          echo "tags: ${ARGS[*]}"
+          echo "sources: ${SOURCES[*]}"
+          docker buildx imagetools create "${ARGS[@]}" "${SOURCES[@]}"
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
 
