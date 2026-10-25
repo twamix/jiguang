@@ -1488,7 +1488,7 @@ export default function AuroraNav() {
 
         <DragOverlay style={{ transformOrigin: '0 0 ' }}>
           {activeDragSite ? (
-            <div style={{ width: parseInt(String(layoutSettings.cardWidth || 170)), height: layoutSettings.cardHeight }}>
+            <div style={{ width: parseInt(String(layoutSettings.cardWidth || 150)), height: layoutSettings.cardHeight }}>
               <SiteCard site={activeDragSite} isLoggedIn={false} isDarkMode={isDarkMode}
                 settings={layoutSettings} isOverlay />
             </div>
@@ -1751,6 +1751,10 @@ export default function AuroraNav() {
         <style>{`
                     :root { --mouse-x: 0px; --mouse-y: 0px; }
                     .group\\/spotlight:hover .spotlight-card::before { opacity: 1; }
+                    .spotlight-card { transition: transform .25s cubic-bezier(.22,1,.36,1), box-shadow .25s ease; }
+                    .group:hover .spotlight-card.lift { transform: translateY(var(--lift, -4px)) scale(1.02); box-shadow: var(--hover-shadow, none); }
+                    .group:active .spotlight-card.press { transform: translateY(0) scale(var(--press-scale, .98)); }
+                    @media (prefers-reduced-motion: reduce) { .spotlight-card { transition: none; } }
                     .spotlight-card::before { background: radial-gradient(800px circle at var(--mouse-x) var(--mouse-y), rgba(99, 102, 241, 0.15), transparent 40%); content: ""; display: block; height: 100%; left: 0; opacity: 0; position: absolute; top: 0; width: 100%; z-index: 2; pointer-events: none; transition: opacity 0.5s; }
                     .text-shadow-sm { text-shadow: 0 1px 2px rgba(0,0,0,0.15), 0 0 1px rgba(0,0,0,0.1); }
                     @keyframes slow-spin { from { transform: rotate(0deg) scale(1); } to { transform: rotate(360deg) scale(1); } }

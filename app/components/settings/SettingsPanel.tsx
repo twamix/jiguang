@@ -1342,7 +1342,7 @@ export function SettingsPanel({
                                         {/* Conditional Sliders based on Mode */}
                                         {(!layoutSettings.gridMode || layoutSettings.gridMode === 'auto') ? (
                                             <div className={`p-3 rounded-xl border transition-all hover:border-indigo-500/50 ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-100'}`}>
-                                                <RangeControl label="卡片宽度 (目标)" value={layoutSettings.cardWidth || 170} min={160} max={400}
+                                                <RangeControl label="卡片宽度 (目标)" value={layoutSettings.cardWidth || 150} min={160} max={400}
                                                     onChange={(v: number) => setLayoutSettings({ ...layoutSettings, cardWidth: v })} unit="px" />
                                             </div>
                                         ) : (

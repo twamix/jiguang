@@ -146,7 +146,7 @@ export const ICON_MAP: any = {
 
 export const DEFAULT_LAYOUT_SETTINGS = {
     cardHeight: 72,
-    cardWidth: 170, // Min width for responsive grid
+    cardWidth: 150, // Min width for responsive grid
     gridCols: 4,
     gap: 5,
     glassOpacity: 70,
@@ -200,20 +200,9 @@ export const DEFAULT_LAYOUT_SETTINGS = {
     widgetStyle: 'B', // 'A' | 'B' | 'C'
 };
 
-// Merge a saved layout over the defaults so fields added later never load as
-// undefined, and carry instances still on old defaults (card size 100×260,
-// system font) down to the current compact defaults. Explicitly customized
-// values are left alone.
+// Merge a saved layout over the defaults so fields added later never load
+// as undefined. Explicitly saved values (including 'system') are the user's
+// choice and must survive a reload untouched.
 export function withLayoutDefaults(saved: any) {
-    const merged = { ...DEFAULT_LAYOUT_SETTINGS, ...saved };
-    if (merged.cardHeight === 100 && merged.cardWidth === 260) {
-        merged.cardHeight = DEFAULT_LAYOUT_SETTINGS.cardHeight;
-        merged.cardWidth = DEFAULT_LAYOUT_SETTINGS.cardWidth;
-    }
-    for (const key of ['fontFamily', 'globalTitleFont', 'globalDescFont']) {
-        if (merged[key] === 'system' || merged[key] === undefined) {
-            merged[key] = 'lxgw-wenkai';
-        }
-    }
-    return merged;
+    return { ...DEFAULT_LAYOUT_SETTINGS, ...saved };
 }

@@ -143,7 +143,7 @@ export const SiteCard = React.memo(function SiteCard({
         perceivedBg = site.color || '#6366f1';
     }
 
-    const [realWidth, setRealWidth] = useState(settings.cardWidth || 170);
+    const [realWidth, setRealWidth] = useState(settings.cardWidth || 150);
     const cardRef = React.useRef<HTMLAnchorElement>(null);
 
     // --- Description Tooltip (hover on desktop, long-press for guests on touch) ---
@@ -367,28 +367,25 @@ export const SiteCard = React.memo(function SiteCard({
         };
     }, [tooltip]);
 
+    // Hover/press run on pure CSS (see .spotlight-card rules in page styles):
+    // 296 framer-motion springs driving every frame is what made the grid sluggish.
+    const enableHover = !isOverlay && (settings.enableHover ?? true);
+    const enableClick = !isOverlay && (settings.enableClick ?? true);
+
     return (
-        <motion.div
-            className={`spotlight-card relative h-full overflow-hidden ${isOverlay ? 'shadow-2xl scale-105 cursor-grabbing' : ''}`}
+        <div
+            className={`spotlight-card relative h-full overflow-hidden ${isOverlay ? 'shadow-2xl scale-105 cursor-grabbing' : ''} ${enableHover ? 'lift' : ''} ${enableClick ? 'press' : ''}`}
             style={{
                 borderRadius: settings.cardRadius ?? 16,
+                '--lift': `${-4 * (settings.hoverIntensity ?? 1)}px`,
+                '--hover-shadow': hoverBoxShadow,
+                '--press-scale': 1 - 0.02 * (settings.clickIntensity ?? 1),
                 ...(isDropTarget && site.type === 'folder' ? {
                     transform: 'scale(1.05)',
                     boxShadow: '0 0 20px rgba(34, 197, 94, 0.5), 0 0 40px rgba(34, 197, 94, 0.3)',
                     transition: 'all 0.2s ease-in-out'
                 } : {})
-            }}
-            whileHover={!isOverlay && (settings.enableHover ?? true) ? {
-                scale: 1.02,
-                y: -4 * (settings.hoverIntensity ?? 1),
-                boxShadow: hoverBoxShadow
-            } : {}}
-            whileTap={!isOverlay && (settings.enableClick ?? true) ? { scale: 1 - (0.02 * (settings.clickIntensity ?? 1)) } : {}}
-            transition={{
-                type: "spring",
-                stiffness: 400 * (settings.hoverIntensity ?? 1),
-                damping: 17
-            }}
+            } as React.CSSProperties}
         >
             <a
                 ref={cardRef}
@@ -489,11 +486,7 @@ export const SiteCard = React.memo(function SiteCard({
                         style={{ transform: tooltip.below ? 'translate(-50%, 10px)' : 'translate(-50%, calc(-100% - 10px))' }}
                     >
                         <div className="px-3 py-1.5">
-                            <div className={`text-sm font-bold truncate ${isDarkMode ? 'text-slate-100' : 'text-slate-700'}`}
-                                style={{ fontFamily: titleFontFamily }}>
-                                {site.name}
-                            </div>
-                            <div className={`text-xs leading-relaxed mt-0.5 line-clamp-3 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}
+                            <div className={`text-xs leading-relaxed line-clamp-3 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}
                                 style={{ fontFamily: descFontFamily, fontSize: descFontSize ? `${descFontSize}px` : undefined }}>
                                 {site.desc}
                             </div>
@@ -505,7 +498,7 @@ export const SiteCard = React.memo(function SiteCard({
                 </div>,
                 document.body
             )}
-        </motion.div >
+        </div >
     );
 });
 
