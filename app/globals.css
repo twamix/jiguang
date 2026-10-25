@@ -1,6 +1,16 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Self-hosted LXGW WenKai Screen, subsetted to GB2312 + ASCII (~1.8MB woff2).
+   Browsers only download it when the family is actually used. */
+@font-face {
+  font-family: "LXGW WenKai";
+  src: url("/fonts/LXGWWenKaiScreen.woff2") format("woff2");
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

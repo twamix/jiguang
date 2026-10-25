@@ -82,7 +82,7 @@ import {
 
 
 import {
-  FONTS, DEFAULT_APP_CONFIG, FRESH_BACKGROUND_COLORS, FRESH_NAV_COLORS, ICON_MAP, DEFAULT_LAYOUT_SETTINGS
+  FONTS, DEFAULT_APP_CONFIG, FRESH_BACKGROUND_COLORS, FRESH_NAV_COLORS, ICON_MAP, DEFAULT_LAYOUT_SETTINGS, withLayoutDefaults
 } from '@/lib/constants';
 
 // --- IMPORTED DATA FROM JSON ---
@@ -265,7 +265,7 @@ export default function AuroraNav() {
               setHiddenCategories(hidden);
             }
             if (data.settings) {
-              if (data.settings.layout) setLayoutSettings(data.settings.layout);
+              if (data.settings.layout) setLayoutSettings(withLayoutDefaults(data.settings.layout));
               if (data.settings.config) setAppConfig(data.settings.config);
               if (data.settings.theme) setIsDarkMode(data.settings.theme.isDarkMode);
               if (data.settings.searchEngine) setSearchEngine(data.settings.searchEngine);
@@ -296,7 +296,7 @@ export default function AuroraNav() {
             setHiddenCategories(hidden);
           }
           if (data.settings) {
-            if (data.settings.layout) setLayoutSettings(data.settings.layout);
+            if (data.settings.layout) setLayoutSettings(withLayoutDefaults(data.settings.layout));
             if (data.settings.config) {
               const loadedConfig = data.settings.config;
               // Migration: Ensure htmlConfig uses arrays
@@ -999,7 +999,7 @@ export default function AuroraNav() {
       // 1. Update Local State
       if (data.sites) setSites(data.sites);
       if (data.categories) setCategories(data.categories);
-      if (data.layout) setLayoutSettings(data.layout);
+      if (data.layout) setLayoutSettings(withLayoutDefaults(data.layout));
       if (data.config) setAppConfig(data.config);
       if (data.categoryColors) setCategoryColors(data.categoryColors);
 
@@ -1483,7 +1483,7 @@ export default function AuroraNav() {
 
         <DragOverlay style={{ transformOrigin: '0 0 ' }}>
           {activeDragSite ? (
-            <div style={{ width: parseInt(String(layoutSettings.cardWidth || 260)), height: layoutSettings.cardHeight }}>
+            <div style={{ width: parseInt(String(layoutSettings.cardWidth || 190)), height: layoutSettings.cardHeight }}>
               <SiteCard site={activeDragSite} isLoggedIn={false} isDarkMode={isDarkMode}
                 settings={layoutSettings} isOverlay />
             </div>

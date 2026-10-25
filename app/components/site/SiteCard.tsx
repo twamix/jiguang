@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { createPortal } from 'react-dom';
 
 
 import NextImage from 'next/image';
@@ -57,9 +58,11 @@ export const SiteCard = React.memo(function SiteCard({
     }, [site.customIconUrl, site.iconType, site.icon, site.id, site.updatedAt]);
 
     const handleClick = (e: React.MouseEvent) => {
-        // Assuming isDragging is defined elsewhere or will be added.
-        // For now, it will be undefined if not provided by useSortable or similar.
-        // if (isDragging) return; 
+        // A long-press that opened the description tooltip must not also open the site.
+        if (suppressClick.current) {
+            e.preventDefault();
+            return;
+        }
 
         if (site.type === 'folder') {
             e.preventDefault();
@@ -140,8 +143,14 @@ export const SiteCard = React.memo(function SiteCard({
         perceivedBg = site.color || '#6366f1';
     }
 
-    const [realWidth, setRealWidth] = useState(settings.cardWidth || 260);
+    const [realWidth, setRealWidth] = useState(settings.cardWidth || 190);
     const cardRef = React.useRef<HTMLAnchorElement>(null);
+
+    // --- Description Tooltip (hover on desktop, long-press for guests on touch) ---
+    const [tooltip, setTooltip] = useState<{ x: number; y: number; below: boolean } | null>(null);
+    const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const longPressStart = useRef({ x: 0, y: 0 });
+    const suppressClick = useRef(false);
 
     useEffect(() => {
         if (!cardRef.current) return;
@@ -300,26 +309,64 @@ export const SiteCard = React.memo(function SiteCard({
 
     // Layout Modes
     const isRowLayout = height < 75;
-    const isTightLayout = height >= 75 && height <= 90;
-    const isStandardLayout = height > 90;
 
-    // Description Limit
-    const showDesc = height > 24; // Minimal threshold
+    // --- Tooltip Handlers ---
+    const showTooltip = () => {
+        if (!site.desc || isOverlay) return;
+        const rect = cardRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const margin = Math.min(150, window.innerWidth / 2);
+        const x = Math.min(Math.max(rect.left + rect.width / 2, margin), window.innerWidth - margin);
+        const below = rect.top < 150;
+        setTooltip({ x, y: below ? rect.bottom : rect.top, below });
+    };
 
-    // Shared Description Renderer
-    const renderDescription = (className = '') => (
-        <span
-            className={`opacity-70 ${hasShadow ? 'text-shadow-sm' : ''} ${className}`}
-            style={{
-                color: descColorStyle,
-                fontFamily: descFontFamily,
-                fontSize: descFontSize ? `${descFontSize}px` : undefined,
-                maxWidth: isRowLayout ? '50%' : undefined
-            }}
-        >
-            {site.desc}
-        </span>
-    );
+    const cancelLongPress = () => {
+        if (longPressTimer.current) {
+            clearTimeout(longPressTimer.current);
+            longPressTimer.current = null;
+        }
+    };
+
+    // While logged in, touch long-press belongs to drag-sorting and the context menu,
+    // so the long-press tooltip is reserved for guests.
+    const handlePointerDown = (e: React.PointerEvent) => {
+        if (e.pointerType === 'mouse' || isLoggedIn || !site.desc || isOverlay) return;
+        longPressStart.current = { x: e.clientX, y: e.clientY };
+        longPressTimer.current = setTimeout(() => {
+            longPressTimer.current = null;
+            suppressClick.current = true;
+            setTimeout(() => { suppressClick.current = false; }, 400);
+            try { navigator.vibrate?.(10); } catch { }
+            showTooltip();
+        }, 450);
+    };
+
+    const handlePointerMove = (e: React.PointerEvent) => {
+        if (!longPressTimer.current) return;
+        const dx = e.clientX - longPressStart.current.x;
+        const dy = e.clientY - longPressStart.current.y;
+        if (dx * dx + dy * dy > 100) cancelLongPress();
+    };
+
+    useEffect(() => cancelLongPress, []);
+
+    // Dismiss the tooltip on scroll or the next touch; mouse leave is handled inline.
+    useEffect(() => {
+        if (!tooltip) return;
+        const hide = () => setTooltip(null);
+        const hideTouch = (e: PointerEvent) => {
+            if (e.pointerType !== 'mouse') hide();
+        };
+        window.addEventListener('scroll', hide, true);
+        window.addEventListener('wheel', hide, { passive: true });
+        document.addEventListener('pointerdown', hideTouch);
+        return () => {
+            window.removeEventListener('scroll', hide, true);
+            window.removeEventListener('wheel', hide);
+            document.removeEventListener('pointerdown', hideTouch);
+        };
+    }, [tooltip]);
 
     return (
         <motion.div
@@ -349,7 +396,13 @@ export const SiteCard = React.memo(function SiteCard({
                 href={isLoggedIn || isOverlay || site.type === 'folder' ? undefined : site.url} target="_blank" rel="noopener noreferrer"
                 onClick={handleClick}
                 onContextMenu={(e) => onContextMenu && onContextMenu(e, site.id)}
-                className={`group relative block h-full border transition-all duration-300 overflow-hidden isolate z-10 ${isLoggedIn ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${site.isHidden && isLoggedIn ? 'opacity-50 grayscale' : ''}`}
+                onPointerEnter={(e) => { if (e.pointerType === 'mouse') showTooltip(); }}
+                onPointerLeave={(e) => { if (e.pointerType === 'mouse') setTooltip(null); }}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={cancelLongPress}
+                onPointerCancel={cancelLongPress}
+                className={`group relative block h-full border transition-all duration-300 overflow-hidden isolate z-10 select-none ${isLoggedIn ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${site.isHidden && isLoggedIn ? 'opacity-50 grayscale' : ''}`}
                 style={{
                     height: `var(--mobile-card-height, ${settings.cardHeight}px)`,
                     borderRadius: settings.cardRadius ?? 16,
@@ -357,7 +410,8 @@ export const SiteCard = React.memo(function SiteCard({
                     borderColor: borderColor,
                     boxShadow: boxShadow,
                     backdropFilter: `blur(${(settings.cardBlur ?? 12) * 0.5}px)`,
-                    WebkitBackdropFilter: `blur(${(settings.cardBlur ?? 12) * 0.5}px)`
+                    WebkitBackdropFilter: `blur(${(settings.cardBlur ?? 12) * 0.5}px)`,
+                    WebkitTouchCallout: 'none'
                 }}
             >
                 {settings.colorfulCards && (
@@ -369,8 +423,8 @@ export const SiteCard = React.memo(function SiteCard({
                     />
                 )}
 
-                <div className={`relative z-10 h-full flex flex-col ${paddingClass} ${isStandardLayout ? 'justify-between' : 'justify-center'}`}>
-                    <div className={`flex ${isStandardLayout ? 'items-start' : 'items-center'} justify-between w-full ${gapClass}`}>
+                <div className={`relative z-10 h-full flex flex-col ${paddingClass} justify-center`}>
+                    <div className={`flex items-center justify-between w-full ${gapClass}`}>
                         {/* 左侧：图标和名称 */}
                         <div className={`flex items-center ${gapClass} min-w-0 flex-1 overflow-hidden`}>
                             {/* Icon Wrapper with Badge */}
@@ -394,10 +448,6 @@ export const SiteCard = React.memo(function SiteCard({
                                     style={{ color: titleColorStyle, fontFamily: titleFontFamily, fontSize: titleFontSize ? `${titleFontSize}px` : undefined }}>
                                     {site.name}
                                 </span>
-
-                                {showDesc && !isStandardLayout && site.desc && (
-                                    renderDescription(`truncate text-xs ${isRowLayout ? 'flex-1' : 'mt-0.5'}`)
-                                )}
                             </div>
                         </div>
 
@@ -424,16 +474,34 @@ export const SiteCard = React.memo(function SiteCard({
                                     style={{ color: textColor }} />)}
                         </div>
                     </div>
-
-                    {/* Footer Description for Standard Layout */}
-                    {showDesc && isStandardLayout && site.desc && (
-                        <p className={`text-xs leading-relaxed line-clamp-2 opacity-70 mt-2 ${hasShadow ? 'text-shadow-sm' : ''}`}
-                            style={{ color: descColorStyle, fontFamily: descFontFamily, fontSize: descFontSize ? `${descFontSize}px` : undefined }}>
-                            {site.desc}
-                        </p>
-                    )}
                 </div >
             </a >
+
+            {/* Description tooltip: hover (desktop) / long-press (guests on touch).
+                Portaled to body so card overflow/transform cannot clip it. */}
+            {tooltip && createPortal(
+                <div className="pointer-events-none" style={{ position: 'fixed', left: tooltip.x, top: tooltip.y, zIndex: 9999 }}>
+                    <div
+                        className={`absolute w-max max-w-[280px] rounded-xl border shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 ${isDarkMode ? 'bg-slate-900/90 border-white/10' : 'bg-white/95 border-slate-200/80'}`}
+                        style={{ transform: tooltip.below ? 'translate(-50%, 10px)' : 'translate(-50%, calc(-100% - 10px))' }}
+                    >
+                        <div className="px-3.5 py-2.5">
+                            <div className="text-sm font-bold truncate"
+                                style={{ color: titleColorStyle, fontFamily: titleFontFamily }}>
+                                {site.name}
+                            </div>
+                            <div className={`text-xs leading-relaxed mt-1 line-clamp-4 ${isDarkMode ? 'text-slate-300' : 'text-slate-500'}`}
+                                style={{ color: descColorStyle, fontFamily: descFontFamily, fontSize: descFontSize ? `${descFontSize}px` : undefined }}>
+                                {site.desc}
+                            </div>
+                        </div>
+                        <div
+                            className={`absolute left-1/2 -translate-x-1/2 rotate-45 w-2.5 h-2.5 border ${isDarkMode ? 'bg-slate-900/90 border-white/10' : 'bg-white/95 border-slate-200/80'} ${tooltip.below ? '-top-1 border-l border-t' : '-bottom-1 border-r border-b'}`}
+                        />
+                    </div>
+                </div>,
+                document.body
+            )}
         </motion.div >
     );
 });

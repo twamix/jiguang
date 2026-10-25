@@ -49,7 +49,7 @@ export const FONTS = [
         id: 'lxgw-wenkai',
         name: '霞鹜文楷 (书写)',
         family: '"LXGW WenKai", sans-serif',
-        url: 'https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.1.0/style.css'
+        url: '' // Self-hosted via @font-face in globals.css
     },
     {
         id: 'inter',
@@ -145,8 +145,8 @@ export const ICON_MAP: any = {
 };
 
 export const DEFAULT_LAYOUT_SETTINGS = {
-    cardHeight: 100,
-    cardWidth: 260, // Min width for responsive grid
+    cardHeight: 72,
+    cardWidth: 190, // Min width for responsive grid
     gridCols: 4,
     gap: 5,
     glassOpacity: 70,
@@ -161,7 +161,7 @@ export const DEFAULT_LAYOUT_SETTINGS = {
     bgType: 'bing', // 'bing' | 'custom' | 'network' | 'color'
     bgColor: '#F8FAFC', // Default pure background color
     bgOpacity: 40, // Mask opacity
-    fontFamily: 'system',
+    fontFamily: 'lxgw-wenkai',
     bgScale: 100, // Default scale 100%
     bgX: 50, // Default center X
     bgY: 50, // Default center Y
@@ -193,9 +193,27 @@ export const DEFAULT_LAYOUT_SETTINGS = {
     // Typography Config (Global)
     globalTitleColor: '', // Empty = Auto/Default
     globalDescColor: '',
-    globalTitleFont: 'system',
-    globalDescFont: 'system',
+    globalTitleFont: 'lxgw-wenkai',
+    globalDescFont: 'lxgw-wenkai',
     globalTitleSize: 15, // px
     globalDescSize: 12,   // px
     widgetStyle: 'B', // 'A' | 'B' | 'C'
 };
+
+// Merge a saved layout over the defaults so fields added later never load as
+// undefined, and carry instances still on old defaults (card size 100×260,
+// system font) down to the current compact defaults. Explicitly customized
+// values are left alone.
+export function withLayoutDefaults(saved: any) {
+    const merged = { ...DEFAULT_LAYOUT_SETTINGS, ...saved };
+    if (merged.cardHeight === 100 && merged.cardWidth === 260) {
+        merged.cardHeight = DEFAULT_LAYOUT_SETTINGS.cardHeight;
+        merged.cardWidth = DEFAULT_LAYOUT_SETTINGS.cardWidth;
+    }
+    for (const key of ['fontFamily', 'globalTitleFont', 'globalDescFont']) {
+        if (merged[key] === 'system' || merged[key] === undefined) {
+            merged[key] = 'lxgw-wenkai';
+        }
+    }
+    return merged;
+}
