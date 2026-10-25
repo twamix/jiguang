@@ -90,7 +90,7 @@ export function SiteGrid({
                             <div className="grid transition-all duration-300 ease-in-out site-grid-responsive" style={{
                                 gap: `${layoutSettings.gap * (layoutSettings.compactMode ? 2.5 : 4)}px`,
                                 gridTemplateColumns: (!layoutSettings.gridMode || layoutSettings.gridMode === 'auto')
-                                    ? `repeat(auto-fill, minmax(${parseInt(String(layoutSettings.cardWidth || 190))}px, 1fr))`
+                                    ? `repeat(auto-fill, minmax(${parseInt(String(layoutSettings.cardWidth || 170))}px, 1fr))`
                                     : `repeat(${layoutSettings.gridCols || 6}, minmax(0, 1fr))`
                             }}>
                                 <SortableContext items={catSiteIds} strategy={createSmartSortingStrategy(visibleSites, catSiteIds)}>
@@ -126,7 +126,7 @@ export function SiteGrid({
                     <div className="grid dynamic-grid site-grid-responsive" style={{
                         gap: `${layoutSettings.gap * (layoutSettings.compactMode ? 2.5 : 4)}px`,
                         gridTemplateColumns: (!layoutSettings.gridMode || layoutSettings.gridMode === 'auto')
-                            ? `repeat(auto-fill, minmax(${layoutSettings.cardWidth || 190}px, 1fr))`
+                            ? `repeat(auto-fill, minmax(${layoutSettings.cardWidth || 170}px, 1fr))`
                             : `repeat(${layoutSettings.gridCols || 6}, minmax(0, 1fr))`
                     }}>
                         <AnimatePresence mode="popLayout" initial={false}>

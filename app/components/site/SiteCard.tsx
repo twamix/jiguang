@@ -143,7 +143,7 @@ export const SiteCard = React.memo(function SiteCard({
         perceivedBg = site.color || '#6366f1';
     }
 
-    const [realWidth, setRealWidth] = useState(settings.cardWidth || 190);
+    const [realWidth, setRealWidth] = useState(settings.cardWidth || 170);
     const cardRef = React.useRef<HTMLAnchorElement>(null);
 
     // --- Description Tooltip (hover on desktop, long-press for guests on touch) ---
@@ -243,7 +243,6 @@ export const SiteCard = React.memo(function SiteCard({
     const descFontFamily = resolveFont(site.descFont) || resolveFont(settings.globalDescFont);
 
     const titleColorStyle = site.titleColor || settings.globalTitleColor || textColor;
-    const descColorStyle = site.descColor || settings.globalDescColor || textColor;
     const titleFontSize = site.titleSize || settings.globalTitleSize;
     const descFontSize = site.descSize || settings.globalDescSize;
 
@@ -478,25 +477,29 @@ export const SiteCard = React.memo(function SiteCard({
             </a >
 
             {/* Description tooltip: hover (desktop) / long-press (guests on touch).
-                Portaled to body so card overflow/transform cannot clip it. */}
+                Portaled to body so card overflow/transform cannot clip it.
+                Colors are fixed per theme — site title colors are tuned for the
+                card surface (often white over wallpapers) and vanish on glass. */}
             {tooltip && createPortal(
                 <div className="pointer-events-none" style={{ position: 'fixed', left: tooltip.x, top: tooltip.y, zIndex: 9999 }}>
                     <div
-                        className={`absolute w-max max-w-[280px] rounded-xl border shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 ${isDarkMode ? 'bg-slate-900/90 border-white/10' : 'bg-white/95 border-slate-200/80'}`}
+                        className={`absolute w-max max-w-[260px] rounded-2xl border backdrop-blur-xl animate-in fade-in duration-200 ${isDarkMode
+                            ? 'bg-slate-900/85 border-white/10 shadow-black/20'
+                            : 'bg-white/75 border-slate-900/5 shadow-slate-900/10'} shadow-lg`}
                         style={{ transform: tooltip.below ? 'translate(-50%, 10px)' : 'translate(-50%, calc(-100% - 10px))' }}
                     >
-                        <div className="px-3.5 py-2.5">
-                            <div className="text-sm font-bold truncate"
-                                style={{ color: titleColorStyle, fontFamily: titleFontFamily }}>
+                        <div className="px-3 py-1.5">
+                            <div className={`text-sm font-bold truncate ${isDarkMode ? 'text-slate-100' : 'text-slate-700'}`}
+                                style={{ fontFamily: titleFontFamily }}>
                                 {site.name}
                             </div>
-                            <div className={`text-xs leading-relaxed mt-1 line-clamp-4 ${isDarkMode ? 'text-slate-300' : 'text-slate-500'}`}
-                                style={{ color: descColorStyle, fontFamily: descFontFamily, fontSize: descFontSize ? `${descFontSize}px` : undefined }}>
+                            <div className={`text-xs leading-relaxed mt-0.5 line-clamp-3 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}
+                                style={{ fontFamily: descFontFamily, fontSize: descFontSize ? `${descFontSize}px` : undefined }}>
                                 {site.desc}
                             </div>
                         </div>
                         <div
-                            className={`absolute left-1/2 -translate-x-1/2 rotate-45 w-2.5 h-2.5 border ${isDarkMode ? 'bg-slate-900/90 border-white/10' : 'bg-white/95 border-slate-200/80'} ${tooltip.below ? '-top-1 border-l border-t' : '-bottom-1 border-r border-b'}`}
+                            className={`absolute left-1/2 -translate-x-1/2 rotate-45 w-2.5 h-2.5 border ${isDarkMode ? 'bg-slate-900/85 border-white/10' : 'bg-white/75 border-slate-900/5'} ${tooltip.below ? '-top-1 border-l border-t' : '-bottom-1 border-r border-b'}`}
                         />
                     </div>
                 </div>,

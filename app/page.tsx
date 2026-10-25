@@ -372,7 +372,12 @@ export default function AuroraNav() {
         if (link.href !== selectedFont.url) link.href = selectedFont.url;
       }
     }
-  }, [layoutSettings.fontFamily]);
+    // Portaled UI (dialogs, tooltips) inherits from <body>, not the page
+    // container, so the selected family must be applied there too.
+    document.body.style.fontFamily = selectedFont?.family
+      || allFonts.find(f => f.id === layoutSettings.fontFamily)?.family
+      || '';
+  }, [layoutSettings.fontFamily, allFonts]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1483,7 +1488,7 @@ export default function AuroraNav() {
 
         <DragOverlay style={{ transformOrigin: '0 0 ' }}>
           {activeDragSite ? (
-            <div style={{ width: parseInt(String(layoutSettings.cardWidth || 190)), height: layoutSettings.cardHeight }}>
+            <div style={{ width: parseInt(String(layoutSettings.cardWidth || 170)), height: layoutSettings.cardHeight }}>
               <SiteCard site={activeDragSite} isLoggedIn={false} isDarkMode={isDarkMode}
                 settings={layoutSettings} isOverlay />
             </div>
